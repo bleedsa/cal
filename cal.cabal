@@ -25,20 +25,24 @@ source-repository head
 
 library
   exposed-modules:
-      IR
+      Asm
+      Com
       Lib
       Parse
+      TyCh
   other-modules:
       Paths_cal
   autogen-modules:
       Paths_cal
   hs-source-dirs:
       src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
-    , megaparsec ==9.0.1
-    , text ==2.1.2
+    , megaparsec
+    , qbe
+    , text
+    , text-short
   default-language: Haskell2010
 
 executable cal-exe
@@ -49,12 +53,14 @@ executable cal-exe
       Paths_cal
   hs-source-dirs:
       app
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec ==9.0.1
-    , text ==2.1.2
+    , megaparsec
+    , qbe
+    , text
+    , text-short
   default-language: Haskell2010
 
 test-suite cal-test
@@ -66,10 +72,12 @@ test-suite cal-test
       Paths_cal
   hs-source-dirs:
       test
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec ==9.0.1
-    , text ==2.1.2
+    , megaparsec
+    , qbe
+    , text
+    , text-short
   default-language: Haskell2010

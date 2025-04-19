@@ -17,7 +17,7 @@
 #
 # snapshot: ./custom-snapshot.yaml
 # snapshot: https://example.com/snapshots/2024-01-01.yaml
-snapshot: ghc-9.12.2
+snapshot: lts-23.14
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -41,30 +41,8 @@ packages:
 #
 allow-newer: true
 extra-deps:
-- megaparsec-9.0.1@sha256:2244ab77521a52a0083966c5405b3151f149e1db50b1a5b104cd9b1e56617203,3248
-- bytestring-0.11.5.4@sha256:896810b10dc600f435606c1e87821a5ae0963eeca2ded88276f4841727209516,7595
-- case-insensitive-1.2.1.0@sha256:9dfd3171fc7698cf8d931727d3af3a7b389135b583e46b5adac1f9d2026fff61,2244
-- containers-0.6.8@sha256:bb2bec1bbc6b39a7c97cd95e056a5698ec45beb5d8feb6caae12af64e4bd823c,2670
-- deepseq-1.4.8.1@sha256:79362747f088481e90c6dd09b5d7a90d52c4e12e72ffe66efaa23b2fba8b8991,2298
-- parser-combinators-1.3.0@sha256:8659573e0d443d573f5b53f81b81dafbdc988d282b90c11e3da73562b4ea7876,1640
-- scientific-0.3.8.0@sha256:ba83a6701dd0110138443757aca4a42786afa94272b73045ef878fd860d1732e,4397
-- text-1.2.5.0@sha256:92ea31d8b356b7fd62ac862b871dc1e134bd5db462d798313babf6aa6f69aca8,8180
-- transformers-0.5.6.2@sha256:6c959d14430f4deffb99579ba019de07c3d852a2122b6f449344386c7d75ff1d,3172
-- binary-0.8.9.3@sha256:8b03c7fd5a7f6803280fba87e38d534beb1dc92fec975de5bd36200633996ef2,6576
-- hashable-1.5.0.0@sha256:2f23146cbe0325029927b221647695a4c7d6e97548ff731110979e34361f58ef,5914
-- integer-logarithms-1.0.4@sha256:caa8eaf9e69fe19f0d356b3f3185df628131407413c182b314ac5dfe2217e4d1,3082
-- mtl-2.3.1@sha256:5377696d7315e2ef31a8d15d67b22d733c20cac2caf8b26756ff8524c8217e6d,1868
-- primitive-0.9.1.0@sha256:dfdd6572944c11e69208237dd32a2eb9d975b4f4e9064a7b8dc952cb0e256846,3119
-- filepath-1.5.4.0@sha256:099c33e0e570dad93390e1c01c1f4bc6e4f13587de8e199df3c94a6cb62c7434,4945
-- os-string-2.0.7@sha256:2efc549644dd418bad537d1601fdd437c440d807265016bd993b6996c679ad2f,3298
-- exceptions-0.10.9@sha256:661e9114615eb5367cf50889a58c83c3b33385e7286448af5f6ff9d15e68e086,2233
+- qbe-1.1.0.0@sha256:6c4a3863e80b45e69e2f6f9b26192d6c95b6b2ff63f1a779004fdc36e5d1ba6b,2987
 
-
-
-
-
-# Override default flag values for project packages and extra-deps
-# flags: {}
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

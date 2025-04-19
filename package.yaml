@@ -21,11 +21,14 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
-- megaparsec == 9.0.1
-- text == 2.1.2
+- megaparsec
+- text
+- text-short
+- qbe
 
 ghc-options:
-- -Wall
+- -XOverloadedStrings
+- -XCPP
 - -Wcompat
 - -Widentities
 - -Wincomplete-record-updates

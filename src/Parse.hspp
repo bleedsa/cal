@@ -1,3 +1,329 @@
+{-# LINE 1 "src/Parse.hs" #-}
+# 0 "src/Parse.hs"
+# 0 "<built-in>"
+# 0 "<command-line>"
+# 8 "<command-line>"
+# 1 "/usr/include/stdc-predef.h" 1 3 4
+
+# 17 "/usr/include/stdc-predef.h" 3 4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 45 "/usr/include/stdc-predef.h" 3 4
+
+# 55 "/usr/include/stdc-predef.h" 3 4
+
+
+
+
+
+
+
+
+
+# 8 "<command-line>" 2
+# 1 "/home/skye/.ghcup/ghc/9.12.2/lib64/ghc-9.12.2/lib/../lib/x86_64-linux-ghc-9.12.2-16c3/rts-1.0.2/include/ghcversion.h" 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 8 "<command-line>" 2
+# 1 "/tmp/ghc54161_tmp_0/ghc_tmp_2.h" 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 8 "<command-line>" 2
+# 1 "src/Parse.hs"
 {-# LANGUAGE CPP #-}
 
 module Parse where
@@ -10,14 +336,7 @@ import Data.Void
 
 import Com
 
-data ParseErr = PrsErrTxt Text
-                deriving (Show, Eq, Ord)
-
-instance ShowErrorComponent ParseErr where
-    showErrorComponent (PrsErrTxt t) = unpack t
-    errorComponentLen (PrsErrTxt t) = Data.Text.length t
-
-type Parser = Parsec ParseErr Text
+type Parser = Parsec Void Text
 
 -- a variable type
 data Type = Signed Int   -- x = number of bits
@@ -128,17 +447,14 @@ typ = do{ p <- getPos
         }
         where
             fromStr :: Text -> Parser Type
-            fromStr "u8" = pure $ Unsigned 8
-            fromStr "u16" = pure $ Unsigned 16
-            fromStr "u32" = pure $ Unsigned 32
-            fromStr "u64" = pure $ Unsigned 64
-            fromStr "i8" = pure $ Signed 8
+
+            fromStr "u"#8 = pure $ Unsigned 8
             fromStr "i32" = pure $ Signed 32
             fromStr "i64" = pure $ Signed 64
 
 expr :: Parser Leaf
 expr = do{ spaces
-         ; x <- choice [bind, monad, try dyad, noun]
+         ; x <- (monad <|> try dyad <|> noun)
          ; spaces
          ; return x
          }
