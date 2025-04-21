@@ -30,6 +30,7 @@ findLeafTy c x@(Leaf p (X _)) = map opt
                                   map (Just (_, t)) = Right t
                                   map Nothing = typeErr p err
 
+-- take two leaves, check if their types match, then return that type or error
 typesMatch :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
 typesMatch p c x y = do{ x' <- typeof c x
                        ; y' <- typeof c y
@@ -41,28 +42,42 @@ typesMatch p c x y = do{ x' <- typeof c x
                               in typeErr p $ printf tmp fX fY
                        }
 
-typeofV :: Ctx -> Text -> [Leaf] -> Either Text Type
-typeofV c "+" [x@(Leaf p _), y] = typesMatch p c x y
-typeofV _ v a = Left $ T.pack $ printf "cannot type verb %s" $ fmtS $ V v a
+typeofV :: P -> Ctx -> Text -> [Leaf] -> Either Text Type
+typeofV p c "+" [x, y] = typesMatch p c x y
+typeofV p c "!" [x] = do{ x' <- typeof c x
+                        ; case x' of
+                              Signed 32 -> Right $ Slice $ Signed 32
+                              t -> typeErr p "iota on non-integer"
+                        }
+typeofV p _ v a = typeErr p $ printf "cannot type verb %s" $ fmtS $ V v a
 
-typeofS :: Ctx -> S -> Either Text Type
-typeofS _ (I _) = Right $ Signed 32
-typeofS _ (F _) = Right $ Float 64
-typeofS c (V v a) = typeofV c v a
-typeofS _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
+typeofS :: P -> Ctx -> S -> Either Text Type
+typeofS _ _ (I _) = Right $ Signed 32
+typeofS _ _ (F _) = Right $ Float 64
+typeofS p c (V v a) = typeofV p c v a
+typeofS _ _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
 
 typeof :: Ctx -> Leaf -> Either Text Type
 typeof c x@(Leaf _ (X _)) = findLeafTy c x
-typeof c x@(Leaf p (O (Sig r a) e)) = do{ t <- typeof ((x, r):c) $ last e
+typeof c x@(Leaf p (O (Sig r a) e)) = do{ t <- typeof ((x, r):c') $ last e
                                         ; if t == r
-                                          then Right $ argsToType $ ("", t):a
+                                          then Right $ typesToArrow at
                                           else Left $ T.pack err
                                         }
                                         where
+                                            c' = argsToCtx c a
+                                            at = map argType a
                                             ft = fmt $ last e
                                             err :: String
                                             err = printf "return type does not match final expr %s" ft
-typeof c (Leaf _ s) = typeofS c s
+typeof c (Leaf p s) = typeofS p c s
+
+argsToCtx :: Ctx -> Args -> Ctx
+argsToCtx c [] = c
+argsToCtx c ((h, ty):t) = argsToCtx c' t
+                        where
+                            c' :: Ctx
+                            c' = (h, ty):c
 
 check :: Ctx -> Type -> Leaf -> Either Text ()
 check c t x = do{ t' <- typeof c x

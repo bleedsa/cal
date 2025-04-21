@@ -17,7 +17,7 @@ fmtType (Float n) = printf "f%d" n
 fmtType Chr = "char"
 
 fmtArg :: Arg -> String
-fmtArg (n, t) = printf "%s: %s" n $ fmtType t
+fmtArg (n, t) = printf "%s: %s" (fmt n) $ fmtType t
 
 fmtArgs :: Args -> String
 fmtArgs [] = ""

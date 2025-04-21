@@ -21,7 +21,7 @@ data Type = Signed Int      -- x = number of bits
           | Arrow Type Type -- arrow from x -> y
           deriving(Show, Eq)
 
-type Arg = (Text, Type)
+type Arg = (Leaf, Type)
 type Args = [Arg]
 
 -- a function signature.
@@ -52,3 +52,11 @@ argsToType :: Args -> Type
 argsToType [] = Void
 argsToType [(_, t)] = t
 argsToType ((_, h):t) = Arrow h $ argsToType t
+
+typesToArrow :: [Type] -> Type
+typesToArrow [] = Void
+typesToArrow [t] = t
+typesToArrow (h:t) = Arrow h $ typesToArrow t
+
+argType :: Arg -> Type
+argType (_, t) = t

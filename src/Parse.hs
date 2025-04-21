@@ -104,9 +104,9 @@ dyad = do{ dbgTrace "dyad"
          } <?> "dyad"
 
 -- an arg like `name: type`
-arg :: Parser (Text, Type)
+arg :: Parser (Leaf, Type)
 arg = do{ dbgTrace "arg"
-        ; n <- name'
+        ; n <- name
         ; spaces
         ; char ':'
         ; spaces
