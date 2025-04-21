@@ -7,6 +7,9 @@ import qualified Data.Text as T
 
 import Ty
 
+fmtP :: P -> String
+fmtP (P line col) = printf "%s,%s" (show line) (show col)
+
 fmtType :: Type -> String
 fmtType (Signed n) = printf "i%d" n
 fmtType (Unsigned n) = printf "u%d" n

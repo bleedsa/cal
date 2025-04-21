@@ -4,6 +4,7 @@ import Text.Printf
 import Text.Megaparsec
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.List as L
 
 import Com
 import Ty
@@ -15,11 +16,33 @@ type Ctx = [(Leaf, Type)]
 mkCtx :: Ctx
 mkCtx = []
 
+-- compiler error
+typeErr :: P -> String -> Either Text Type
+typeErr p s = Left $ T.pack $ printf "err: 'type: %s: %s" (fmtP p) s
+
+-- find the leaf type in a context
+findLeafTy :: Ctx -> Leaf -> Either Text Type
+findLeafTy c x@(Leaf p (X _)) = map opt
+                              where
+                                  x' = fmt x
+                                  err = printf "type of leaf %s not found" x'
+                                  opt = L.find (\(i, _) -> i == x) c
+                                  map (Just (_, t)) = Right t
+                                  map Nothing = typeErr p err
+
+typesMatch :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
+typesMatch p c x y = do{ x' <- typeof c x
+                       ; y' <- typeof c y
+                       ; if x' == y'
+                         then Right x'
+                         else let fX = fmt x
+                                  fY = fmt y
+                                  tmp = "%s does not match type of %s in add"
+                              in typeErr p $ printf tmp fX fY
+                       }
+
 typeofV :: Ctx -> Text -> [Leaf] -> Either Text Type
-typeofV c "+" [x, y] = do{ check c (Signed 32) x
-                         ; check c (Signed 32) y
-                         ; Right $ Signed 32
-                         }
+typeofV c "+" [x@(Leaf p _), y] = typesMatch p c x y
 typeofV _ v a = Left $ T.pack $ printf "cannot type verb %s" $ fmtS $ V v a
 
 typeofS :: Ctx -> S -> Either Text Type
@@ -29,6 +52,7 @@ typeofS c (V v a) = typeofV c v a
 typeofS _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
 
 typeof :: Ctx -> Leaf -> Either Text Type
+typeof c x@(Leaf _ (X _)) = findLeafTy c x
 typeof c x@(Leaf p (O (Sig r a) e)) = do{ t <- typeof ((x, r):c) $ last e
                                         ; if t == r
                                           then Right $ argsToType $ ("", t):a

@@ -5,10 +5,6 @@ import Debug.Trace
 
 type Res t = Either String t
 
--- line, col position
-data P = P Pos Pos
-         deriving (Show, Eq)
-
 #define DBG
 
 #ifdef DBG

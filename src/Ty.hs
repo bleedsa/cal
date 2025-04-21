@@ -1,8 +1,13 @@
 module Ty where
 
 import Data.Text (Text)
+import Text.Megaparsec (Pos)
 
 import Com
+
+-- line, col position
+data P = P Pos Pos
+         deriving (Show, Eq)
 
 -- a variable type
 data Type = Signed Int      -- x = number of bits
@@ -39,6 +44,9 @@ data S = I Int         -- integer
 -- a leaf is a position and an expression stem
 data Leaf = Leaf P S
           deriving (Show, Eq)
+
+leafP :: Leaf -> P
+leafP (Leaf p _) = p
 
 argsToType :: Args -> Type
 argsToType [] = Void
