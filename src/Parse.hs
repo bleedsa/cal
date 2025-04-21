@@ -5,46 +5,33 @@ module Parse where
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Printf
-import Data.Text
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Void
 
 import Com
+import Ty
+import Fmt
 
 data ParseErr = PrsErrTxt Text
                 deriving (Show, Eq, Ord)
 
 instance ShowErrorComponent ParseErr where
-    showErrorComponent (PrsErrTxt t) = unpack t
-    errorComponentLen (PrsErrTxt t) = Data.Text.length t
+    showErrorComponent (PrsErrTxt t) = T.unpack t
+    errorComponentLen (PrsErrTxt t) = T.length t
 
 type Parser = Parsec ParseErr Text
 
--- a variable type
-data Type = Signed Int   -- x = number of bits
-          | Unsigned Int -- x = number of bits
-          | Void
-          | Fun Sig
-          deriving(Show, Eq)
-
--- a function signature.
--- 0: return type
--- 1: argument types
-data Sig = Sig Type [Type]
-         deriving(Show, Eq)
-
--- S expression stems
-data S = I Int         -- integer
-       | F Double      -- float
-       | Str Text      -- string
-       | V Text [Leaf] -- verb (Cons)
-       | O Sig [Leaf]  -- lambda
-       | T Type        -- typename
-       | X Text        -- identifier
-       deriving (Show, Eq)
-
--- a leaf is a position and an expression stem
-data Leaf = Leaf P S
-          deriving (Show, Eq)
+-- turn some literal text into a simple type
+txtToType :: Text -> Parser Type
+txtToType "u8" = pure $ Unsigned 8
+txtToType "u16" = pure $ Unsigned 16
+txtToType "u32" = pure $ Unsigned 32
+txtToType "u64" = pure $ Unsigned 64
+txtToType "i8" = pure $ Signed 8
+txtToType "i32" = pure $ Signed 32
+txtToType "i64" = pure $ Signed 64
+txtToType x = customFailure $ PrsErrTxt $ T.pack $ printf "invalid type %s" x
 
 getPos :: Parser P
 getPos = do{ state <- getParserState
@@ -55,40 +42,43 @@ getPos = do{ state <- getParserState
 spaces :: Parser ()
 spaces = do { _ <- many space1
             ; pure ()
-            }
+            } <?> "spaces"
 
 int :: Parser Leaf
-int = do{ p <- getPos
+int = do{ dbgTrace "int"
+        ; p <- getPos
         ; h <- digitChar
         ; i <- many digitChar
         ; return $ Leaf p $ I $ read $ printf "%c%s" h i
         } <?> "integer"
 
 flt :: Parser Leaf
-flt = do{ p <- getPos
+flt = do{ dbgTrace "flt"
+        ; p <- getPos
         ; h <- digitChar
         ; i' <- manyTill digitChar $ char '.' -- int
         ; let i = [h] ++ i'
         ; d <- many digitChar -- decimal 
         ; let i = if d == "" then i else printf "%s.%s" i d
         ; return $ Leaf p $ F $ read i
-        }
+        } <?> "float"
 
 num :: Parser Leaf
 num = (try flt <|> int) <?> "number"
 
 str :: Parser Leaf
-str = do{ p <- getPos
+str = do{ dbgTrace "str"
+        ; p <- getPos
         ; _ <- char '"'
         ; s <- (many $ anySingleBut '"') <?> "string"
-        ; return $ Leaf p $ Str $ pack s
+        ; return $ Leaf p $ Str $ T.pack s
         } <?> "string"
 
 verbStr :: Parser Text
 verbStr = do{ h <- v
             ; t <- many v
-            ; return $ pack $ h:t
-            }
+            ; return $ T.pack $ h:t
+            } <?> "verb string"
             where
                 vs :: String
                 vs = "~!@#$%^&*_+-=|:'<>?/.,\\|"
@@ -96,58 +86,110 @@ verbStr = do{ h <- v
                 v = oneOf vs
 
 monad :: Parser Leaf
-monad = do{ p <- getPos
+monad = do{ dbgTrace "monad"
+          ; p <- getPos
           ; v <- verbStr
           ; x <- expr
           ; return $ Leaf p $ V v [x]
-          }
+          } <?> "monad"
 
 dyad :: Parser Leaf
-dyad = do{ p <- getPos
+dyad = do{ dbgTrace "dyad"
+         ; p <- getPos
          ; x <- noun
          ; spaces
          ; v <- verbStr
          ; y <- expr
          ; return $ Leaf p $ V v [x, y]
-         }
+         } <?> "dyad"
+
+-- an arg like `name: type`
+arg :: Parser (Text, Type)
+arg = do{ dbgTrace "arg"
+        ; n <- name'
+        ; spaces
+        ; char ':'
+        ; spaces
+        ; t <- typ'
+        ; return (n, t)
+        } <?> "function argument"
+
+sig :: Parser Sig
+sig = do{ dbgTrace "sig"
+        ; a <- args
+        ; r <- typ'
+        ; let a' = case a of
+                       Left _ -> []
+                       Right a -> a
+          in return $ Sig r a'
+        } <?> "function signature"
+        where
+            sep = do{ spaces
+                    ; string "->"
+                    ; spaces
+                    }
+            args' = do{ dbgTrace "sig.args'"
+                      ; as <- try arg `sepBy` try arrow
+                      ; sep
+                      ; return as
+                      }
+            args = observing args'
+            arrow = try $ do{ dbgTrace "sig.arrow"
+                            ; sep
+                            ; notFollowedBy typ'
+                            }
+
+fun :: Parser Leaf
+fun = do{ dbgTrace "fun"
+        ; p <- getPos
+        ; char '{'
+        ; spaces
+        ; s <- between (char '[') (char ']') sig
+        ; spaces
+        ; x <- exprs
+        ; spaces
+        ; char '}'
+        ; return $ Leaf p $ O s x
+        } <?> "function"
 
 noun :: Parser Leaf
-noun = (num <|> str) <?> "noun"
-
-name :: Parser Text
-name = do{ h <- letterChar
-         ; t <- many $ alphaNumChar <|> char '_'
-         ; return $ pack $ h:t
+noun = do{ dbgTrace "noun"
+         ; (name <|> num <|> str <|> fun) <?> "noun"
          }
+
+name' :: Parser Text
+name' = do{ dbgTrace "name'"
+          ; h <- letterChar
+          ; t <- (many $ alphaNumChar <|> char '_') <?> "valid name chars"
+          ; return $ T.pack $ h:t
+          } <?> "name'"
+
+name :: Parser Leaf
+name = do{ dbgTrace "name"
+         ; p <- getPos
+         ; x <- name'
+         ; return $ Leaf p $ X x
+         } <?> "name"
+
+typ' :: Parser Type
+typ' = do{ dbgTrace "typ'"
+         ; n <- name'
+         ; txtToType n
+         } <?> "typename'"
 
 typ :: Parser Leaf
-typ = do{ p <- getPos
-        ; n <- name
-        ; t <- fromStr n
+typ = do{ dbgTrace "typ"
+        ; p <- getPos
+        ; t <- typ'
         ; return $ Leaf p $ T t
-        }
-        where
-            fromStr :: Text -> Parser Type
-            fromStr "u8" = pure $ Unsigned 8
-            fromStr "u16" = pure $ Unsigned 16
-            fromStr "u32" = pure $ Unsigned 32
-            fromStr "u64" = pure $ Unsigned 64
-            fromStr "i8" = pure $ Signed 8
-            fromStr "i32" = pure $ Signed 32
-            fromStr "i64" = pure $ Signed 64
-
-expr :: Parser Leaf
-expr = do{ spaces
-         ; x <- choice [bind, monad, try dyad, noun]
-         ; spaces
-         ; return x
-         }
+        } <?> "typename"
 
 bind :: Parser Leaf
-bind = do{ p <- getPos
-         ; _ <- string $ pack "let"
+bind = do{ dbgTrace "bind"
+         ; p <- getPos
+         ; _ <- string $ T.pack "let"
          ; spaces
-         ; n <- name
+         ; n <- name'
          ; spaces
          ; _ <- char ':'
          ; spaces
@@ -157,22 +199,38 @@ bind = do{ p <- getPos
          ; spaces
          ; x <- expr
          ; return $ Leaf p $ V "let" [Leaf p $ X n, t, x]
-         }
+         } <?> "let binding"
+
+expr :: Parser Leaf
+expr = do{ dbgTrace "expr"
+         ; spaces
+         ; x <- choice e <?> "expression"
+         ; spaces
+         ; return x
+         } <?> "expression"
+         where
+             e = [ try bind
+                 , try dyad
+                 , monad
+                 , noun
+                 ]
 
 exprs :: Parser [Leaf]
-exprs = do{ x <- expr
+exprs = do{ dbgTrace "exprs"
+          ; x <- expr
           ; y <- observing rest
           ; return $ case y of
                          Left _ -> [x]
                          Right tail -> x:tail
-          }
+          } <?> "expressions"
           where
               rest :: Parser [Leaf]
               rest = do{ char ';'
+                       ; spaces
                        ; exprs
                        }
 
 prs :: Text -> IO ()
 prs x = putStrLn $ case parse exprs "" x of
                        Left e -> errorBundlePretty e
-                       Right x -> show x
+                       Right x -> show $ map fmt x

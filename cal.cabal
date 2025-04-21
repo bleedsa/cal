@@ -27,8 +27,10 @@ library
   exposed-modules:
       Asm
       Com
+      Fmt
       Lib
       Parse
+      Ty
       TyCh
   other-modules:
       Paths_cal
@@ -39,7 +41,7 @@ library
   ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
-    , megaparsec
+    , megaparsec ==9.7.0
     , qbe
     , text
     , text-short
@@ -57,7 +59,7 @@ executable cal-exe
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec
+    , megaparsec ==9.7.0
     , qbe
     , text
     , text-short
@@ -76,7 +78,7 @@ test-suite cal-test
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec
+    , megaparsec ==9.7.0
     , qbe
     , text
     , text-short
