@@ -5,7 +5,7 @@ import Debug.Trace
 
 type Res t = Either String t
 
-#define DBG
+-- #define DBG
 
 #ifdef DBG
 dbgTrace x = traceM x

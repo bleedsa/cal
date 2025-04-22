@@ -20,6 +20,18 @@ mkCtx = []
 typeErr :: P -> String -> Either Text Type
 typeErr p s = Left $ T.pack $ printf "err: 'type: %s: %s" (fmtP p) s
 
+-- is x matching type y
+is :: Type -> Type -> Maybe Type
+-- GenInt matches signed and unsigned ints
+is GenInt y@(Signed _) = Just y
+is x@(Signed _) GenInt = Just x
+is GenInt y@(Unsigned _) = Just y
+is x@(Unsigned _) GenInt = Just x
+-- everything else just matches for equality
+is x y = if x == y
+         then Just x
+         else Nothing
+
 -- find the leaf type in a context
 findLeafTy :: Ctx -> Leaf -> Either Text Type
 findLeafTy c x@(Leaf p (X _)) = map opt
@@ -34,13 +46,17 @@ findLeafTy c x@(Leaf p (X _)) = map opt
 typesMatch :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
 typesMatch p c x y = do{ x' <- typeof c x
                        ; y' <- typeof c y
-                       ; if x' == y'
-                         then Right x'
-                         else let fX = fmt x
-                                  fY = fmt y
-                                  tmp = "%s does not match type of %s in add"
-                              in typeErr p $ printf tmp fX fY
+                       ; case x' `is` y' of
+                             Just t -> Right t
+                             Nothing -> err x' y'
                        }
+                       where
+                           fX = fmt x
+                           fY = fmt y
+                           tmp = "%s (%s) does not match type of %s (%s) in add"
+                           err x y = let tX = fmtType x
+                                         tY = fmtType y
+                                     in typeErr p $ printf tmp fX tX fY tY
 
 typeofV :: P -> Ctx -> Text -> [Leaf] -> Either Text Type
 typeofV p c "+" [x, y] = typesMatch p c x y
@@ -52,24 +68,28 @@ typeofV p c "!" [x] = do{ x' <- typeof c x
 typeofV p _ v a = typeErr p $ printf "cannot type verb %s" $ fmtS $ V v a
 
 typeofS :: P -> Ctx -> S -> Either Text Type
-typeofS _ _ (I _) = Right $ Signed 32
+typeofS _ _ (I _) = Right GenInt
 typeofS _ _ (F _) = Right $ Float 64
 typeofS p c (V v a) = typeofV p c v a
 typeofS _ _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
 
+-- pos -> ctx -> fun -> return type -> args types -> body expressions
+typeofFun :: P -> Ctx -> Leaf -> Type -> Args -> [Leaf] -> Either Text Type
+typeofFun p c x r a e = do{ t <- typeof ((x, r):c') $ last e
+                          ; case t `is` r of
+                                Just t -> Right $ typesToArrow at
+                                Nothing -> typeErr p $ printf err ft fe
+                          }
+                          where
+                              c' = argsToCtx c a
+                              at = map argType a
+                              fe = fmt $ last e
+                              ft = fmtType r
+                              err = "ret type %s does not match type of expr %s"
+
 typeof :: Ctx -> Leaf -> Either Text Type
 typeof c x@(Leaf _ (X _)) = findLeafTy c x
-typeof c x@(Leaf p (O (Sig r a) e)) = do{ t <- typeof ((x, r):c') $ last e
-                                        ; if t == r
-                                          then Right $ typesToArrow at
-                                          else Left $ T.pack err
-                                        }
-                                        where
-                                            c' = argsToCtx c a
-                                            at = map argType a
-                                            ft = fmt $ last e
-                                            err :: String
-                                            err = printf "return type does not match final expr %s" ft
+typeof c x@(Leaf p (O (Sig r a) e)) = typeofFun p c x r a e
 typeof c (Leaf p s) = typeofS p c s
 
 argsToCtx :: Ctx -> Args -> Ctx

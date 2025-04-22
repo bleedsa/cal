@@ -1,5 +1,6 @@
 module Fmt where
 
+import Text.Megaparsec
 import Text.Printf
 import qualified Data.List as L
 import Data.Text (Text)
@@ -8,9 +9,10 @@ import qualified Data.Text as T
 import Ty
 
 fmtP :: P -> String
-fmtP (P line col) = printf "%s,%s" (show line) (show col)
+fmtP (P line col) = printf "%d,%d" (unPos line) (unPos col)
 
 fmtType :: Type -> String
+fmtType (GenInt) = "{int}"
 fmtType (Signed n) = printf "i%d" n
 fmtType (Unsigned n) = printf "u%d" n
 fmtType (Float n) = printf "f%d" n

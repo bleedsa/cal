@@ -29,6 +29,7 @@ txtToType "u16" = pure $ Unsigned 16
 txtToType "u32" = pure $ Unsigned 32
 txtToType "u64" = pure $ Unsigned 64
 txtToType "i8" = pure $ Signed 8
+txtToType "i16" = pure $ Signed 16
 txtToType "i32" = pure $ Signed 32
 txtToType "i64" = pure $ Signed 64
 txtToType x = customFailure $ PrsErrTxt $ T.pack $ printf "invalid type %s" x

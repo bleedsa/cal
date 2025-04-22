@@ -10,7 +10,8 @@ data P = P Pos Pos
          deriving (Show, Eq)
 
 -- a variable type
-data Type = Signed Int      -- x = number of bits
+data Type = GenInt
+          | Signed Int      -- x = number of bits
           | Unsigned Int    -- x = number of bits
           | Float Int       -- x = number of bits
           | Chr
