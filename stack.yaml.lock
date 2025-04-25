@@ -3,14 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages:
-- completed:
-    hackage: qbe-1.1.0.0@sha256:6c4a3863e80b45e69e2f6f9b26192d6c95b6b2ff63f1a779004fdc36e5d1ba6b,2987
-    pantry-tree:
-      sha256: 633e60fffefffb254617a2bf3bee197a518349f895697165bae77d9f7fc18bf6
-      size: 1195
-  original:
-    hackage: qbe-1.1.0.0@sha256:6c4a3863e80b45e69e2f6f9b26192d6c95b6b2ff63f1a779004fdc36e5d1ba6b,2987
+packages: []
 snapshots:
 - completed:
     sha256: 1964d439d2a152be4238053f3f997a09fb348391984daab86d724975ef9a423f

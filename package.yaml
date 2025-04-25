@@ -21,10 +21,10 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
-- megaparsec == 9.7.0
+- mtl == 2.3.1
+- megaparsec == 9.6.1
 - text
 - text-short
-- qbe
 
 ghc-options:
 - -XOverloadedStrings

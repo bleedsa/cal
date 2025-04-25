@@ -61,3 +61,6 @@ typesToArrow (h:t) = Arrow h $ typesToArrow t
 
 argType :: Arg -> Type
 argType (_, t) = t
+
+sOf :: Leaf -> S
+sOf (Leaf _ s) = s

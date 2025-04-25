@@ -2,8 +2,9 @@ module Com where
 
 import Text.Megaparsec
 import Debug.Trace
+import Data.Text (Text)
 
-type Res t = Either String t
+type Res t = Either Text t
 
 -- #define DBG
 

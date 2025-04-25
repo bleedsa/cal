@@ -97,12 +97,24 @@ monad = do{ dbgTrace "monad"
 dyad :: Parser Leaf
 dyad = do{ dbgTrace "dyad"
          ; p <- getPos
-         ; x <- noun
+         ; x <- try term <|> noun
          ; spaces
          ; v <- verbStr
          ; y <- expr
          ; return $ Leaf p $ V v [x, y]
          } <?> "dyad"
+
+mexpr :: Parser Leaf
+mexpr = do{ dbgTrace "mexpr"
+          ; p <- getPos
+          ; x <- noun
+          ; spaces
+          ; char '['
+          ; p' <- getPos
+          ; y <- exprs
+          ; char ']'
+          ; return $ Leaf p $ V "." [x, Leaf p' $ A y]
+          }
 
 -- an arg like `name: type`
 arg :: Parser (Leaf, Type)
@@ -202,6 +214,11 @@ bind = do{ dbgTrace "bind"
          ; return $ Leaf p $ V "let" [Leaf p $ X n, t, x]
          } <?> "let binding"
 
+term :: Parser Leaf
+term = do{ dbgTrace "term"
+         ; mexpr <|> noun
+         }
+
 expr :: Parser Leaf
 expr = do{ dbgTrace "expr"
          ; spaces
@@ -213,6 +230,7 @@ expr = do{ dbgTrace "expr"
              e = [ try bind
                  , try dyad
                  , monad
+                 , try term
                  , noun
                  ]
 

@@ -39,10 +39,7 @@ packages:
 # - git: https://github.com/commercialhaskell/stack.git
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
-allow-newer: true
 extra-deps:
-- qbe-1.1.0.0@sha256:6c4a3863e80b45e69e2f6f9b26192d6c95b6b2ff63f1a779004fdc36e5d1ba6b,2987
-
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

@@ -32,10 +32,12 @@ fmtS :: S -> String
 fmtS (I x) = printf "%d" x
 fmtS (F x) = printf "%f" x
 fmtS (X x) = T.unpack x
+fmtS (A x) = printf "(%s)" $ L.intercalate ";" $ map fmt x
 fmtS (O s x) = printf "{[%s] %s}" (fmtSig s) (L.intercalate ";" $ map fmt x)
 fmtS (V v [x, y]) = printf "%s%s%s" (fmt x) v (fmt y)
 fmtS (V v [x]) = printf "%s%s" v $ fmt x
 fmtS (V v a) = printf "%s[%s]" v $ L.intercalate ";" $ map fmt a
+fmtS x = show x
 
 fmt :: Leaf -> String
 fmt (Leaf _ s) = fmtS s

@@ -25,10 +25,11 @@ source-repository head
 
 library
   exposed-modules:
-      Asm
       Com
       Fmt
+      Ir
       Lib
+      LLVM
       Parse
       Ty
       TyCh
@@ -41,8 +42,8 @@ library
   ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
-    , megaparsec ==9.7.0
-    , qbe
+    , megaparsec ==9.6.1
+    , mtl ==2.3.1
     , text
     , text-short
   default-language: Haskell2010
@@ -59,8 +60,8 @@ executable cal-exe
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec ==9.7.0
-    , qbe
+    , megaparsec ==9.6.1
+    , mtl ==2.3.1
     , text
     , text-short
   default-language: Haskell2010
@@ -78,8 +79,8 @@ test-suite cal-test
   build-depends:
       base >=4.7 && <5
     , cal
-    , megaparsec ==9.7.0
-    , qbe
+    , megaparsec ==9.6.1
+    , mtl ==2.3.1
     , text
     , text-short
   default-language: Haskell2010

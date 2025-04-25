@@ -58,6 +58,21 @@ typesMatch p c x y = do{ x' <- typeof c x
                                          tY = fmtType y
                                      in typeErr p $ printf tmp fX tX fY tY
 
+typeApply1 :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
+typeApply1 p c x y = do{ x' <- typeof c x
+                       ; y' <- typeof c x
+                       ; dbgTrace $ fmtType x'
+                       ; case x' of
+                             Arrow from to -> do{ _ <- check c from y
+                                                ; Right to
+                                                }
+                             ty -> typeErr p $ printf err fX (fmtType ty)
+                       }
+                       where
+                           fX = fmt x
+                           err = "%s is used as a function but it is %s"
+                          
+
 typeofV :: P -> Ctx -> Text -> [Leaf] -> Either Text Type
 typeofV p c "+" [x, y] = typesMatch p c x y
 typeofV p c "!" [x] = do{ x' <- typeof c x
@@ -65,6 +80,7 @@ typeofV p c "!" [x] = do{ x' <- typeof c x
                               Signed 32 -> Right $ Slice $ Signed 32
                               t -> typeErr p "iota on non-integer"
                         }
+typeofV p c "@" [x, y] = typeApply1 p c x y
 typeofV p _ v a = typeErr p $ printf "cannot type verb %s" $ fmtS $ V v a
 
 typeofS :: P -> Ctx -> S -> Either Text Type
@@ -77,7 +93,7 @@ typeofS _ _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
 typeofFun :: P -> Ctx -> Leaf -> Type -> Args -> [Leaf] -> Either Text Type
 typeofFun p c x r a e = do{ t <- typeof ((x, r):c') $ last e
                           ; case t `is` r of
-                                Just t -> Right $ typesToArrow at
+                                Just t -> Right $ typesToArrow $ t:at
                                 Nothing -> typeErr p $ printf err ft fe
                           }
                           where
@@ -92,6 +108,13 @@ typeof c x@(Leaf _ (X _)) = findLeafTy c x
 typeof c x@(Leaf p (O (Sig r a) e)) = typeofFun p c x r a e
 typeof c (Leaf p s) = typeofS p c s
 
+typesof :: Ctx -> [Leaf] -> Either Text [Type]
+typesof c [] = Right []
+typesof c (h:t) = do{ h' <- typeof c h
+                    ; t' <- typesof c t
+                    ; Right $ h':t'
+                    }
+
 argsToCtx :: Ctx -> Args -> Ctx
 argsToCtx c [] = c
 argsToCtx c ((h, ty):t) = argsToCtx c' t
@@ -101,12 +124,18 @@ argsToCtx c ((h, ty):t) = argsToCtx c' t
 
 check :: Ctx -> Type -> Leaf -> Either Text ()
 check c t x = do{ t' <- typeof c x
-                ; if t /= t'
-                  then let e = printf "%s has type %s but is used as %s"
-                               (fmt x) (show t') (show t)
-                       in Left $ T.pack e
-                  else pure ()
+                ; case t `is` t' of
+                      Nothing -> let e = "%s has type %s but is used as %s"
+                                     fX = fmt x
+                                     fT' = fmtType t'
+                                     fT = fmtType t
+                                 in do{ _ <- typeErr p $ printf e fX fT' fT
+                                      ; pure ()
+                                      }
+                      Just _ -> pure ()
                 }
+                where
+                    p = leafP x
 
 typeTxt :: Text -> IO ()
 typeTxt x = putStrLn $ un p
