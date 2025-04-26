@@ -194,6 +194,17 @@ cmpExprs (h:t) = do{ cmpLeaf h
                    ; cmpExprs t
                    }
 
+cmpMath :: (Type -> Loc -> Loc -> Loc -> Instr) -> Type -> Leaf -> Leaf -> IrFunT Loc
+cmpMath f t x y = do{ c <- getFCtx
+                    ; t' <- expTy t x
+                    ; t' <- expTy t' y
+                    ; x' <- cmpLeafAs t' x
+                    ; y' <- cmpLeafAs t' y
+                    ; tmp <- newVar
+                    ; pushFInstr $ f t' tmp x' y'
+                    ; return tmp
+                    }
+
 -- pos -> expected type -> fun -> return type -> arg types -> exprs
 cmpLam :: P -> Type -> Leaf -> Type -> Args -> [Leaf] -> IrFunT Loc
 cmpLam p t x r a e = do{ c <- getFCtx
@@ -202,12 +213,29 @@ cmpLam p t x r a e = do{ c <- getFCtx
                        ; cmpExprs e
                        }
 
+cmpV :: P -> Type -> Text -> [Leaf] -> IrFunT Loc
+cmpV p t "+" [x, y] = cmpMath Add t x y
+cmpV p t "-" [x, y] = cmpMath Sub t x y
+cmpV p t "*" [x, y] = cmpMath Mul t x y
+cmpV p t "%" [x, y] = cmpMath Div t x y
+cmpV p t v a = do{ src <- getFSrc
+                 ; let e = printf "verb %s not found\n%s"
+                           (fmtS $ V v a) (fmtPtTo src $ pExt p)
+                 ; un $ cmpErr p e
+                 }
+
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
                                  ; tmp <- newVar
                                  ; pushFInstr $ Lit t' tmp $ IrInt t' i
                                  ; return tmp
                                  }
+cmpLeafAs t x@(Leaf p (X i)) = do{ t' <- expTy t x
+                                 ; tmp <- newVar
+                                 ; pushFInstr $ LoadLocal t' tmp i
+                                 ; return tmp
+                                 }
+cmpLeafAs t x@(Leaf p (V v a)) = cmpV p t v a
 cmpLeafAs t x@(Leaf p (O (Sig r a) e)) = cmpLam p t x r a e
 cmpLeafAs t (Leaf p s) = do{ src <- getFSrc
                            ; let e = printf "cannot compile leaf %s as type %s\n%s"

@@ -105,12 +105,19 @@ data Instr = Push Type Loc
            | Lit Type Loc IrVal
            -- create a local variable with name x
            | Local Type Text
+           -- load a local into a location
+           | LoadLocal Type Loc Text
            -- push fn param with type T and location x
            | Param Type Loc
            -- call fn x with pushed params
            | Call Type Loc
            -- return the value at loc
            | Ret Loc
+           -- math: all locations have type t, x := y op z
+           | Add Type Loc Loc Loc
+           | Sub Type Loc Loc Loc
+           | Div Type Loc Loc Loc
+           | Mul Type Loc Loc Loc
            deriving (Show, Eq)
 
 -- global var in module

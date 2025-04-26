@@ -59,7 +59,7 @@ typesMatch p c x y = do{ x' <- typeof c x
                        where
                            fX = fmt x
                            fY = fmt y
-                           tmp = "%s (%s) does not match type of %s (%s) in add"
+                           tmp = "%s (%s) does not match type of %s (%s)"
                            err x y = let tX = fmtType x
                                          tY = fmtType y
                                      in typeErr p $ printf tmp fX tX fY tY
@@ -81,6 +81,9 @@ typeApply1 p c x y = do{ x' <- typeof c x
 
 typeofV :: P -> Ctx -> Text -> [Leaf] -> Res Type
 typeofV p c "+" [x, y] = typesMatch p c x y
+typeofV p c "-" [x, y] = typesMatch p c x y
+typeofV p c "*" [x, y] = typesMatch p c x y
+typeofV p c "%" [x, y] = typesMatch p c x y
 typeofV p c "!" [x] = do{ x' <- typeof c x
                         ; case x' `is` GenInt of
                               Just t -> Right $ Slice t
