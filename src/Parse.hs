@@ -35,8 +35,7 @@ txtToType "i64" = pure $ Signed 64
 txtToType x = customFailure $ PrsErrTxt $ T.pack $ printf "invalid type %s" x
 
 getPos :: Parser P
-getPos = do{ state <- getParserState
-           ; let pos = pstateSourcePos $ statePosState state
+getPos = do{ pos <- getSourcePos
            ; return $ P (sourceLine pos) (sourceColumn pos)
            }
 
@@ -197,22 +196,43 @@ typ = do{ dbgTrace "typ"
         ; return $ Leaf p $ T t
         } <?> "typename"
 
+let_ :: Parser ()
+let_ = do{ _ <- string $ T.pack "let"
+         ; pure ()
+         }
+
+bind3 :: Parser Leaf
+bind3 = do{ dbgTrace "bind3"
+          ; p <- getPos
+          ; let_
+          ; spaces
+          ; n <- name'
+          ; spaces
+          ; _ <- char ':'
+          ; spaces
+          ; t <- typ
+          ; spaces
+          ; _ <- char '='
+          ; spaces
+          ; x <- expr
+          ; return $ Leaf p $ V "let" [Leaf p $ X n, t, x]
+          } <?> "ternary let binding"
+
+bind2 :: Parser Leaf
+bind2 = do{ dbgTrace "bind2"
+          ; p <- getPos
+          ; let_
+          ; spaces
+          ; n <- name
+          ; spaces
+          ; _ <- char '='
+          ; spaces
+          ; x <- expr
+          ; return $ Leaf p $ V "let" [n, x]
+          } <?> "binary let binding"
+
 bind :: Parser Leaf
-bind = do{ dbgTrace "bind"
-         ; p <- getPos
-         ; _ <- string $ T.pack "let"
-         ; spaces
-         ; n <- name'
-         ; spaces
-         ; _ <- char ':'
-         ; spaces
-         ; t <- typ
-         ; spaces
-         ; _ <- char '='
-         ; spaces
-         ; x <- expr
-         ; return $ Leaf p $ V "let" [Leaf p $ X n, t, x]
-         } <?> "let binding"
+bind = try bind3 <|> bind2
 
 term :: Parser Leaf
 term = do{ dbgTrace "term"

@@ -2,6 +2,7 @@ module TyCh where
 
 import Text.Printf
 import Text.Megaparsec
+import Debug.Trace
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.List as L
@@ -11,14 +12,9 @@ import Ty
 import Parse
 import Fmt
 
-type Ctx = [(Leaf, Type)]
-
-mkCtx :: Ctx
-mkCtx = []
-
 -- compiler error
-typeErr :: P -> String -> Either Text Type
-typeErr p s = Left $ T.pack $ printf "err: 'type: %s: %s" (fmtP p) s
+typeErr :: P -> String -> Res Type
+typeErr p s = Left $ T.pack $ printf "err: 'type: %s:\n%s" (fmtP p) s
 
 -- is x matching type y
 is :: Type -> Type -> Maybe Type
@@ -32,18 +28,28 @@ is x y = if x == y
          then Just x
          else Nothing
 
+-- add args to the type context
+argsToCtx :: Ctx -> Args -> Res Ctx
+argsToCtx c [] = pure c
+argsToCtx c ((Leaf _ (X h), ty):t) = do{ x <- argsToCtx ((h, ty):c) t
+                                       ; Right x
+                                       }
+
+-- return type -> arg types -> new arrow type
+sigToArrow :: Type -> [Type] -> Type
+sigToArrow ret [] = Arrow Void ret
+sigToArrow ret at = typesToArrow $ ret:at
+
 -- find the leaf type in a context
-findLeafTy :: Ctx -> Leaf -> Either Text Type
-findLeafTy c x@(Leaf p (X _)) = map opt
-                              where
-                                  x' = fmt x
-                                  err = printf "type of leaf %s not found" x'
-                                  opt = L.find (\(i, _) -> i == x) c
-                                  map (Just (_, t)) = Right t
-                                  map Nothing = typeErr p err
+findLeafTy :: Ctx -> Leaf -> Res Type
+findLeafTy c (Leaf p (X x)) = map $ L.find (\(i, _) -> i == x) c 
+                            where
+                                err = printf "type of leaf %s not found" x
+                                map (Just (_, t)) = Right t
+                                map Nothing = typeErr p err
 
 -- take two leaves, check if their types match, then return that type or error
-typesMatch :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
+typesMatch :: P -> Ctx -> Leaf -> Leaf -> Res Type
 typesMatch p c x y = do{ x' <- typeof c x
                        ; y' <- typeof c y
                        ; case x' `is` y' of
@@ -58,7 +64,7 @@ typesMatch p c x y = do{ x' <- typeof c x
                                          tY = fmtType y
                                      in typeErr p $ printf tmp fX tX fY tY
 
-typeApply1 :: P -> Ctx -> Leaf -> Leaf -> Either Text Type
+typeApply1 :: P -> Ctx -> Leaf -> Leaf -> Res Type
 typeApply1 p c x y = do{ x' <- typeof c x
                        ; y' <- typeof c x
                        ; dbgTrace $ fmtType x'
@@ -73,56 +79,48 @@ typeApply1 p c x y = do{ x' <- typeof c x
                            err = "%s is used as a function but it is %s"
                           
 
-typeofV :: P -> Ctx -> Text -> [Leaf] -> Either Text Type
+typeofV :: P -> Ctx -> Text -> [Leaf] -> Res Type
 typeofV p c "+" [x, y] = typesMatch p c x y
 typeofV p c "!" [x] = do{ x' <- typeof c x
-                        ; case x' of
-                              Signed 32 -> Right $ Slice $ Signed 32
-                              t -> typeErr p "iota on non-integer"
+                        ; case x' `is` GenInt of
+                              Just t -> Right $ Slice t
+                              Nothing -> typeErr p "iota on non-integer"
                         }
 typeofV p c "@" [x, y] = typeApply1 p c x y
 typeofV p _ v a = typeErr p $ printf "cannot type verb %s" $ fmtS $ V v a
 
-typeofS :: P -> Ctx -> S -> Either Text Type
+typeofS :: P -> Ctx -> S -> Res Type
 typeofS _ _ (I _) = Right GenInt
-typeofS _ _ (F _) = Right $ Float 64
 typeofS p c (V v a) = typeofV p c v a
-typeofS _ _ x = Left $ T.pack $ printf "cannot type S expr %s" $ fmtS x
+typeofS p _ x = typeErr p $ printf "cannot type S expr %s" $ fmtS x
 
 -- pos -> ctx -> fun -> return type -> args types -> body expressions
-typeofFun :: P -> Ctx -> Leaf -> Type -> Args -> [Leaf] -> Either Text Type
-typeofFun p c x r a e = do{ t <- typeof ((x, r):c') $ last e
+typeofFun :: P -> Ctx -> Leaf -> Type -> Args -> [Leaf] -> Res Type
+typeofFun p c x r a e = do{ c' <- argsToCtx c a
+                          ; t <- typeof c' $ last e
                           ; case t `is` r of
-                                Just t -> Right $ typesToArrow $ t:at
+                                Just t -> Right $ sigToArrow t at
                                 Nothing -> typeErr p $ printf err ft fe
                           }
                           where
-                              c' = argsToCtx c a
                               at = map argType a
                               fe = fmt $ last e
                               ft = fmtType r
                               err = "ret type %s does not match type of expr %s"
 
-typeof :: Ctx -> Leaf -> Either Text Type
+typeof :: Ctx -> Leaf -> Res Type
 typeof c x@(Leaf _ (X _)) = findLeafTy c x
 typeof c x@(Leaf p (O (Sig r a) e)) = typeofFun p c x r a e
 typeof c (Leaf p s) = typeofS p c s
 
-typesof :: Ctx -> [Leaf] -> Either Text [Type]
+typesof :: Ctx -> [Leaf] -> Res [Type]
 typesof c [] = Right []
 typesof c (h:t) = do{ h' <- typeof c h
                     ; t' <- typesof c t
                     ; Right $ h':t'
                     }
 
-argsToCtx :: Ctx -> Args -> Ctx
-argsToCtx c [] = c
-argsToCtx c ((h, ty):t) = argsToCtx c' t
-                        where
-                            c' :: Ctx
-                            c' = (h, ty):c
-
-check :: Ctx -> Type -> Leaf -> Either Text ()
+check :: Ctx -> Type -> Leaf -> Res ()
 check c t x = do{ t' <- typeof c x
                 ; case t `is` t' of
                       Nothing -> let e = "%s has type %s but is used as %s"
