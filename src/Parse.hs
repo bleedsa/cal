@@ -44,12 +44,17 @@ spaces = do { _ <- many space1
             ; pure ()
             } <?> "spaces"
 
+int' :: Parser Int
+int' = do{ dbgTrace "int"
+         ; h <- digitChar
+         ; i <- many digitChar
+         ; return $ read $ printf "%c%s" h i
+         } <?> "literal integer"
+
 int :: Parser Leaf
-int = do{ dbgTrace "int"
-        ; p <- getPos
-        ; h <- digitChar
-        ; i <- many digitChar
-        ; return $ Leaf p $ I $ read $ printf "%c%s" h i
+int = do{ p <- getPos
+        ; i <- int'
+        ; return $ Leaf p $ I i
         } <?> "integer"
 
 flt :: Parser Leaf
@@ -165,9 +170,22 @@ fun = do{ dbgTrace "fun"
         ; return $ Leaf p $ O s x
         } <?> "function"
 
+list :: Parser Leaf
+list = do{ dbgTrace "list"
+         ; p <- getPos
+         ; char '['
+         ; spaces
+         ; x <- nouns
+         ; spaces
+         ; char ']'
+         ; return $ if length x == 1
+                    then x !! 0
+                    else Leaf p $ A x
+         }
+
 noun :: Parser Leaf
 noun = do{ dbgTrace "noun"
-         ; (name <|> num <|> str <|> fun) <?> "noun"
+         ; (name <|> num <|> str <|> list <|> fun) <?> "noun"
          }
 
 name' :: Parser Text
@@ -268,6 +286,20 @@ exprs = do{ dbgTrace "exprs"
               rest = do{ char ';'
                        ; spaces
                        ; exprs
+                       }
+
+nouns :: Parser [Leaf]
+nouns = do{ dbgTrace "nouns"
+          ; x <- noun
+          ; y <- observing rest
+          ; return $ case y of
+                         Left _ -> [x]
+                         Right t -> x:t
+          } <?> "nouns"
+          where
+              rest = do{ char ';'
+                       ; spaces
+                       ; nouns
                        }
 
 top :: Parser [Leaf]

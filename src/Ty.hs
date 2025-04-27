@@ -26,6 +26,7 @@ data Type = GenInt
           | Chr
           | Void
           | Slice Type
+          | Array Type Int  -- type, size
           | Fun Sig
           | Name Text
           | Arrow Type Type -- arrow from x -> y
@@ -46,7 +47,7 @@ data S = I Int         -- integer
        | Str Text      -- string
        | V Text [Leaf] -- verb (Cons)
        | O Sig [Leaf]  -- lambda
-       | A [Leaf]      -- vec
+       | A [Leaf]      -- array
        | T Type        -- typename
        | X Text        -- identifier
        | M Leaf [Leaf]
@@ -128,6 +129,10 @@ data Instr = Push Type Loc
            | Modu Type Loc Loc Loc
            -- x := -y
            | Neg Type Loc Loc
+           -- x := new t[size]
+           | NewArray Type Loc Int
+           -- x[i] := y
+           | SetArray Loc Loc Loc
            deriving (Show, Eq)
 
 -- global var in module
@@ -139,6 +144,7 @@ type Body = (Int, Int)
 -- a value
 data IrVal = IrInt Type Int
            | IrFun Type Int
+           | IrArr Type Int [IrVal]
            deriving (Show, Eq)
 
 -- a module builder

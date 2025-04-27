@@ -22,6 +22,7 @@ fmtType (Unsigned n) = printf "u%d" n
 fmtType (Float n) = printf "f%d" n
 fmtType Chr = "char"
 fmtType (Slice t) = printf "[%s]" $ fmtType t
+fmtType (Array t s) = printf "[%s; %d]" (fmtType t) s
 fmtType (Arrow x y) = printf "%s -> %s" x' y'
                     where
                         x' = fmtType x

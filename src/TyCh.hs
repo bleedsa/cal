@@ -146,6 +146,16 @@ getVerb v a = L.findIndex fnd verbs
                                 Nothing -> False
                  | otherwise = False
 
+allMatch :: P -> Ctx -> [Leaf] -> Res Type
+allMatch p c [x] = typeof c x
+allMatch p c (h:t) = do{ h' <- typeof c h
+                       ; t' <- allMatch p c t
+                       ; case h' `is` t' of
+                             Just t -> Right t
+                             Nothing -> typeErr p $ printf "leaf %s (%s) does not match type of %s"
+                                                           (fmt h) (fmtType h') (fmtType t')
+                       }
+
 typeofV :: P -> Ctx -> Text -> [Leaf] -> Res Type
 typeofV p c v a = do{ a' <- typesof c a
                     ; fndVerbOvrldTy p c v a'
@@ -164,6 +174,9 @@ typeofS p c (M x a) = do{ a' <- typesof c a
                                                  (fmt x) (L.intercalate ";" $ a)
                                          in t e
                         }
+typeofS p c (A x) = do{ t <- allMatch p c x
+                      ; return $ Array t $ length x
+                      }
 typeofS p _ x = typeErr p $ printf "cannot type S expr %s" $ fmtS x
 
 -- pos -> ctx -> fun -> return type -> args types -> body expressions

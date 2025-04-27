@@ -56,6 +56,6 @@ mathSigned :: [Verb]
 mathSigned = concat $ map (mathVs . Signed) [8, 16, 32, 64]
 
 verbs :: [Verb]
-verbs = concat [ mathSigned
-               , mathVs GenInt
+verbs = concat [ mathVs GenInt
+               , mathSigned
                ]

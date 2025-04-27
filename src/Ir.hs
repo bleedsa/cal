@@ -139,6 +139,14 @@ cmpM p t x a = do{ c <- getFCtx
                  ; return ret
                  }
 
+cmpSetIndices :: P ->  Int -> Loc -> [Loc] -> IrFunT ()
+cmpSetIndices p n a [] = pure ()
+cmpSetIndices p n a (h:t) = do{ c <- getFCtx
+                              ; i <- cmpLeaf $ Leaf p $ I n
+                              ; pushFInstr $ SetArray a i h
+                              ; cmpSetIndices p (n+1) a t
+                              }
+
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
                                  ; tmp <- newVar
@@ -150,6 +158,14 @@ cmpLeafAs t x@(Leaf p (X i)) = do{ t' <- expTy t x
                                  ; pushFInstr $ LoadLocal t' tmp i
                                  ; return tmp
                                  }
+cmpLeafAs t x@(Leaf p (A v)) = do{ t' <- expTy t x
+                                 ; ret <- newVar
+                                 ; locs <- cmpExprs v
+                                 ; cmpSetIndices p 0 ret locs
+                                 ; return ret
+                                 }
+                                 where
+                                     sz = length v
 cmpLeafAs t x@(Leaf p (V v a)) = cmpV p t v a
 cmpLeafAs t (Leaf p (M x a)) = cmpM p t x a
 cmpLeafAs t x@(Leaf p (O (Sig r a) e)) = cmpLam p t x r a e
