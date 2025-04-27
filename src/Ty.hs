@@ -49,6 +49,7 @@ data S = I Int         -- integer
        | A [Leaf]      -- vec
        | T Type        -- typename
        | X Text        -- identifier
+       | M Leaf [Leaf]
        deriving (Show, Eq)
 
 -- a leaf is a position and an expression stem

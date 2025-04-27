@@ -46,6 +46,7 @@ fmtS (O s x) = printf "{[%s] %s}" (fmtSig s) (L.intercalate ";" $ map fmt x)
 fmtS (V v [x, y]) = printf "%s%s%s" (fmt x) v (fmt y)
 fmtS (V v [x]) = printf "%s%s" v $ fmt x
 fmtS (V v a) = printf "%s[%s]" v $ L.intercalate ";" $ map fmt a
+fmtS (M x a) = printf "%s[%s]" (fmt x) $ L.intercalate ";" $ map fmt a
 fmtS x = show x
 
 fmt :: Leaf -> String

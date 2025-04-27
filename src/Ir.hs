@@ -199,6 +199,11 @@ fmtResult (Right (_, x)) = fmtMod x
 cmpTxt :: Text -> IO ()
 cmpTxt x = putStrLn $ un fmtResult e
          where
-             e = parse exprs "" x
+             e = parse top "" x
              un f (Left e) = errorBundlePretty e
              un f (Right e) = f $ runStateT (cmpTopLeaves e) $ mkMod x
+
+cmpFile :: String -> IO ()
+cmpFile x = do{ f <- readFile x
+              ; cmpTxt $ T.pack f
+              }

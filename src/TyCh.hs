@@ -154,6 +154,16 @@ typeofV p c v a = do{ a' <- typesof c a
 typeofS :: P -> Ctx -> S -> Res Type
 typeofS _ _ (I _) = Right GenInt
 typeofS p c (V v a) = typeofV p c v a
+typeofS p c (M x a) = do{ a' <- typesof c a
+                        ; x' <- typeof c x
+                        ; case canApply x' a' of
+                              Just t -> Right t
+                              Nothing -> let t = typeErr p
+                                             a = map fmtType a'
+                                             e = printf "cannot apply %s to [%s]"
+                                                 (fmt x) (L.intercalate ";" $ a)
+                                         in t e
+                        }
 typeofS p _ x = typeErr p $ printf "cannot type S expr %s" $ fmtS x
 
 -- pos -> ctx -> fun -> return type -> args types -> body expressions

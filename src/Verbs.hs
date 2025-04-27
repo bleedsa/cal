@@ -13,29 +13,29 @@ run :: IrFunT a -> Function
 run f = unsafeUn $ runBuilder f $ mkFun "" $ mkMod ""
 
 -- math ops are all pretty much the same
-math :: (Type -> Loc -> Loc -> Loc -> Instr) -> Function
-math f = run $ do{ x <- newVar
-                 ; y <- newVar
-                 ; r <- newVar
-                 ; pushFInstr $ LoadLocal GenInt x "x"
-                 ; pushFInstr $ LoadLocal GenInt y "y"
-                 ; pushFInstr $ f GenInt r x y
-                 }
+math :: Type -> (Type -> Loc -> Loc -> Loc -> Instr) -> Function
+math t f = run $ do{ x <- newVar
+                   ; y <- newVar
+                   ; r <- newVar
+                   ; pushFInstr $ LoadLocal t x "x"
+                   ; pushFInstr $ LoadLocal t y "y"
+                   ; pushFInstr $ f t r x y
+                   }
 
-add :: Function
-add = math Add
+add :: Type -> Function
+add t = math t Add
 
-sub :: Function
-sub = math Sub
+sub :: Type -> Function
+sub t = math t Sub
 
-mul :: Function
-mul = math Mul
+mul :: Type -> Function
+mul t = math t Mul
 
-div :: Function
-div = math Div
+div :: Type -> Function
+div t = math t Div
 
-modu :: Function
-modu = math Modu
+modu :: Type -> Function
+modu t = math t Modu
 
 neg :: Function
 neg = run $ do{ x <- newVar
@@ -44,11 +44,18 @@ neg = run $ do{ x <- newVar
               ; pushFInstr $ Neg GenInt r x
               }
 
+mathVs :: Type -> [Verb]
+mathVs t = [ ("+", typesToArrow [t, t, t], add t)
+           , ("-", typesToArrow [t, t, t], sub t)
+           , ("*", typesToArrow [t, t, t], mul t)
+           , ("%", typesToArrow [t, t, t], Verbs.div t)
+           , ("!", typesToArrow [t, t, t], modu t)
+           ]
+
+mathSigned :: [Verb]
+mathSigned = concat $ map (mathVs . Signed) [8, 16, 32, 64]
+
 verbs :: [Verb]
-verbs = [ ("+", typesToArrow [GenInt, GenInt, GenInt], add)
-        , ("-", typesToArrow [GenInt, GenInt, GenInt], sub)
-        , ("*", typesToArrow [GenInt, GenInt, GenInt], mul)
-        , ("%", typesToArrow [GenInt, GenInt, GenInt], Verbs.div)
-        , ("!", typesToArrow [GenInt, GenInt, GenInt], modu)
-        , ("-", typesToArrow [GenInt, GenInt], neg)
-        ]
+verbs = concat [ mathSigned
+               , mathVs GenInt
+               ]

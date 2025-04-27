@@ -109,10 +109,9 @@ mexpr = do{ dbgTrace "mexpr"
           ; x <- noun
           ; spaces
           ; char '['
-          ; p' <- getPos
           ; y <- exprs
           ; char ']'
-          ; return $ Leaf p $ V "." [x, Leaf p' $ A y]
+          ; return $ Leaf p $ M x y
           }
 
 -- an arg like `name: type`
@@ -270,6 +269,12 @@ exprs = do{ dbgTrace "exprs"
                        ; spaces
                        ; exprs
                        }
+
+top :: Parser [Leaf]
+top = do{ e <- exprs
+        ; eof
+        ; return e
+        }
 
 prs :: Text -> IO ()
 prs x = putStrLn $ case parse exprs "" x of
