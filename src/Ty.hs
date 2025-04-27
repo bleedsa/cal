@@ -114,8 +114,8 @@ data Instr = Push Type Loc
            | LoadLocal Type Loc Text
            -- push fn param with type T and location x
            | Param Type Loc
-           -- call fn x with pushed params
-           | Call Type Loc
+           -- call fn y with pushed params into x
+           | Call Type Loc Loc
            -- call verb y with pushed params into x
            | Verb Type Loc Int
            -- return the value at loc

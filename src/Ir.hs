@@ -122,6 +122,23 @@ cmpV p t v a = case L.find (\(n, _, _) -> n == v) verbs of
                                 }
                    Just (v, vT, vF) -> cmpVerb p v t vT vF a
 
+cmpM :: P -> Type -> Leaf -> [Leaf] -> IrFunT Loc
+cmpM p t x a = do{ c <- getFCtx
+                 ; x' <- un $ typeof c x
+                 ; a' <- un $ typesof c a
+                 ; f <- cmpLeaf x
+                 ; locs <- cmpExprs a
+                 ; ret <- newVar
+                 ; cmpParams $ zip a' locs
+                 ; case canApply x' a' of
+                       Just t' -> case t `is` t' of
+                                      Just t -> pushFInstr $ Call t ret f
+                                      Nothing -> let e = printf "%s doesn't match %s"
+                                                                (fmtType t) (fmtType t')
+                                                 in un $ cmpErr p e
+                 ; return ret
+                 }
+
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
                                  ; tmp <- newVar
@@ -134,6 +151,7 @@ cmpLeafAs t x@(Leaf p (X i)) = do{ t' <- expTy t x
                                  ; return tmp
                                  }
 cmpLeafAs t x@(Leaf p (V v a)) = cmpV p t v a
+cmpLeafAs t (Leaf p (M x a)) = cmpM p t x a
 cmpLeafAs t x@(Leaf p (O (Sig r a) e)) = cmpLam p t x r a e
 cmpLeafAs t (Leaf p s) = do{ src <- getFSrc
                            ; let e = printf "cannot compile leaf %s as type %s\n%s"
