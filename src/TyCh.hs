@@ -108,6 +108,7 @@ cantApply p x a = typeErr p $ printf "cannot apply %s to %s"
 
 canApply :: Type -> [Type] -> Maybe Type
 canApply _ [] = Nothing
+canApply (Arrow _ (Arrow _ _)) [h] = Nothing
 canApply (Arrow fr to) [h] = do{ h' <- h `is` fr
                                ; Just to
                                }

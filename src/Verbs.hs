@@ -22,6 +22,15 @@ math f = run $ do{ x <- newVar
 add :: Function
 add = math Add
 
+sub :: Function
+sub = math Sub
+
+mul :: Function
+mul = math Mul
+
+div :: Function
+div = math Div
+
 neg :: Function
 neg = run $ do{ x <- newVar
               ; r <- newVar
@@ -33,5 +42,8 @@ type Verb = (Text, Type, Function)
 
 verbs :: [Verb]
 verbs = [ ("+", typesToArrow [GenInt, GenInt, GenInt], add)
+        , ("-", typesToArrow [GenInt, GenInt, GenInt], sub)
+        , ("*", typesToArrow [GenInt, GenInt, GenInt], mul)
+        , ("%", typesToArrow [GenInt, GenInt, GenInt], Verbs.div)
         , ("-", typesToArrow [GenInt, GenInt], neg)
         ]
