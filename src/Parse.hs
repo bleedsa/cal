@@ -156,7 +156,9 @@ fun = do{ dbgTrace "fun"
         ; p <- getPos
         ; char '{'
         ; spaces
-        ; s <- between (char '[') (char ']') sig
+        ; s <- sig
+        ; spaces
+        ; char ';'
         ; spaces
         ; x <- exprs
         ; spaces

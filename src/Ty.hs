@@ -124,6 +124,7 @@ data Instr = Push Type Loc
            | Sub Type Loc Loc Loc
            | Div Type Loc Loc Loc
            | Mul Type Loc Loc Loc
+           | Modu Type Loc Loc Loc
            -- x := -y
            | Neg Type Loc Loc
            deriving (Show, Eq)
