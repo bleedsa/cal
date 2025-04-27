@@ -7,155 +7,20 @@ import Text.Printf
 import Text.Megaparsec (Pos)
 import Text.Megaparsec (parse, errorBundlePretty)
 import qualified Data.Text as T
+import qualified Data.List as L
 
 import Com
 import Parse
 import Ty
 import TyCh
 import Fmt
+import Verbs
 
 cmpErr' :: P -> String -> Text
 cmpErr' p x = T.pack $ printf "err: 'compile: %s\n%s" (fmtP p) x
 
 cmpErr :: P -> String -> Res a
 cmpErr p x = Left $ cmpErr' p x
-
--- unwrap an Either into an Ir err
-un :: Either e a -> IrMonad e s a
-un (Right x) = pure x
-un (Left e) = lift $ Left e
-
--- unwrap a maybe or return 
-maybeOr :: Maybe a -> IrMonad e s e -> IrMonad e s a
-maybeOr (Just x) _ = pure x
-maybeOr Nothing f = do{ x <- f
-                      ; lift $ Left x
-                      }
-
-joinAndIdx :: a -> [a] -> (Int, [a])
-joinAndIdx x v = (i, v ++ [x])
-               where
-                   i = length v
-
-pushCtx' :: (Text, Type) -> Mod -> (Int, Mod)
-pushCtx' x m = let (i, v) = joinAndIdx x $ ctx m
-               in (i, Mod { ctx = x:ctx m
-                          , vars = vars m
-                          , funs = funs m
-                          , src = src m
-                          })
-
-pushVar' :: Var -> Mod -> (Int, Mod)
-pushVar' x m = let (i, v) = joinAndIdx x $ vars m
-               in (i, Mod { ctx = ctx m
-                          , vars = v
-                          , funs = funs m
-                          , src = src m
-                          })
-
-pushFun' :: Named Function -> Mod -> (Int, Mod)
-pushFun' x m = let (i, v) = joinAndIdx x $ funs m
-               in (i, Mod { ctx = ctx m
-                          , vars = vars m
-                          , funs = v
-                          , src = src m
-                          })
-
-incVar :: Function -> Function
-incVar f = Function { fsrc = fsrc f
-                    , finstrs = finstrs f
-                    , fctx = fctx f
-                    , flocals = flocals f
-                    , ftmp = ftmp f + 1
-                    , fmod = fmod f
-                    } 
-
-pushFInstr' :: Instr -> Function -> Function
-pushFInstr' x f = Function { fsrc = fsrc f
-                           , finstrs = finstrs f ++ [x]
-                           , fctx = fctx f
-                           , flocals = flocals f
-                           , ftmp = ftmp f
-                           , fmod = fmod f
-                           }
-
-pushFCtx' :: (Text, Type) -> Function -> Function
-pushFCtx' x f = Function { fsrc = fsrc f
-                         , finstrs = finstrs f
-                         , fctx = x:fctx f
-                         , flocals = flocals f
-                         , ftmp = ftmp f
-                         , fmod = fmod f
-                         }
-
-joinFCtx' :: [(Text, Type)] -> Function -> Function
-joinFCtx' x f = Function { fsrc = fsrc f
-                         , finstrs = finstrs f
-                         , fctx = x ++ fctx f
-                         , flocals = flocals f
-                         , ftmp = ftmp f
-                         , fmod = fmod f
-                         }
-
-{--
- - wrap some common ops with State
- --}
-
--- return from a state update lambda with () and the new state
-retNil :: a -> ((), a)
-retNil x = ((), x)
-
--- update a module with a function that takes a Mod and returns a new Mod
-updMod :: (Mod -> Mod) -> IrModT ()
-updMod f = state $ \m -> retNil $ f m
-
-updModThen :: (Mod -> (a, Mod)) -> IrModT a
-updModThen f = state $ \m -> let (i, m') = f m
-                             in (i, m')
-updFun :: (Function -> Function) -> IrFunT ()
-updFun f = state $ \m -> retNil $ f m
-
-updFunThen :: (Function -> (a, Function)) -> IrFunT a
-updFunThen f = state $ \m -> f m
-
-pushCtx :: (Text, Type) -> IrModT Int
-pushCtx x = updModThen $ pushCtx' x
-
-pushVar :: Var -> IrModT Int
-pushVar x = updModThen $ pushVar' x
-
-pushFun :: Named Function -> IrModT Int
-pushFun x = updModThen $ pushFun' x
-
-pushFInstr :: Instr -> IrFunT ()
-pushFInstr x = updFun $ pushFInstr' x
-
-joinFCtx :: [(Text, Type)] -> IrFunT ()
-joinFCtx x = updFun $ joinFCtx' x
-
-pushFCtx :: (Text, Type) -> IrFunT ()
-pushFCtx x = updFun $ pushFCtx' x
-
-getCtx :: IrModT Ctx
-getCtx = getFromMod ctx
-
-getSrc :: IrModT Text
-getSrc = getFromMod src
-
-getMod :: IrModT Mod
-getMod = state $ \m -> (m, m)
-
-getFSrc :: IrFunT Text
-getFSrc = getFromFun fsrc
-
-getFCtx :: IrFunT Ctx
-getFCtx = getFromFun fctx
-
-newVar :: IrFunT Loc
-newVar = do{ n <- getFromFun ftmp
-           ; updFun incVar
-           ; return $ Var n
-           }
 
 typeNeq' :: Text -> Type -> (Leaf, Type) -> Text
 typeNeq' src t (Leaf p x, x') = c $ printf tmp fX fX' fT' $ pt src
@@ -175,6 +40,18 @@ typeNeq t x = do{ src <- getFSrc
                 ; return $ typeNeq' src t x
                 }
 
+-- return a formatted error when a verb isn't found
+vNotFnd :: P -> Text -> [Leaf] -> IrFunT Text
+vNotFnd p v a = do{ c <- getFCtx
+                  ; src <- getFSrc
+                  ; a' <- un $ typesof c a
+                  ; let fA' = L.intercalate ";" $ map fmtType a'
+                    in return $ e $ printf "verb overload not found: %s[%s]\n%s"
+                                           v fA' $ fmtPtTo src $ pExt p
+                  }
+                  where
+                      e = cmpErr' p
+
 expTy :: Type -> Leaf -> IrFunT Type
 expTy t x = do{ c <- getFCtx
               ; x' <- un $ typeof c x
@@ -188,10 +65,13 @@ cmpArgs ((Leaf _ (X x), ty):t) = do{ _ <- pushFInstr $ Local ty x
                                    ; cmpArgs t
                                    }
 
-cmpExprs :: [Leaf] -> IrFunT Loc
-cmpExprs [x] = cmpLeaf x
-cmpExprs (h:t) = do{ cmpLeaf h
-                   ; cmpExprs t
+cmpExprs :: [Leaf] -> IrFunT [Loc]
+cmpExprs [x] = do{ x' <- cmpLeaf x
+                 ; return [x']
+                 }
+cmpExprs (h:t) = do{ h' <- cmpLeaf h
+                   ; t' <- cmpExprs t
+                   ; return $ h':t'
                    }
 
 cmpMath :: (Type -> Loc -> Loc -> Loc -> Instr) -> Type -> Leaf -> Leaf -> IrFunT Loc
@@ -210,19 +90,37 @@ cmpLam :: P -> Type -> Leaf -> Type -> Args -> [Leaf] -> IrFunT Loc
 cmpLam p t x r a e = do{ c <- getFCtx
                        ; cmpArgs a
                        ; r' <- expTy r $ last e
-                       ; cmpExprs e
+                       ; e' <- cmpExprs e
+                       ; return $ last e'
                        }
 
+cmpParams :: [(Type, Loc)] -> IrFunT ()
+cmpParams [] = pure ()
+cmpParams ((ty, h):t) = do{ pushFInstr $ Param ty h
+                          ; cmpParams t
+                          }
+
+-- pos -> expected type -> verb func type -> verb func -> args
+cmpVerb :: P -> Text -> Type -> Type -> Function -> [Leaf] -> IrFunT Loc
+cmpVerb p v e t f a = do{ c <- getFCtx
+                        ; locs <- cmpExprs a
+                        ; a' <- un $ typesof c a
+                        ; v' <- maybeOr (getVerb v a') $ vNotFnd p v a
+                        ; let prms = zip a' locs
+                        ; cmpParams prms
+                        ; ret <- newVar
+                        ; pushFInstr $ Verb e ret v'
+                        ; return ret
+                        }
+
 cmpV :: P -> Type -> Text -> [Leaf] -> IrFunT Loc
-cmpV p t "+" [x, y] = cmpMath Add t x y
-cmpV p t "-" [x, y] = cmpMath Sub t x y
-cmpV p t "*" [x, y] = cmpMath Mul t x y
-cmpV p t "%" [x, y] = cmpMath Div t x y
-cmpV p t v a = do{ src <- getFSrc
-                 ; let e = printf "verb %s not found\n%s"
-                           (fmtS $ V v a) (fmtPtTo src $ pExt p)
-                 ; un $ cmpErr p e
-                 }
+cmpV p t v a = case L.find (\(n, _, _) -> n == v) verbs of
+                   Nothing -> do{ src <- getFSrc
+                                ; let e = printf "verb %s not found\n%s"
+                                          (fmtS $ V v a) (fmtPtTo src $ pExt p)
+                                ; un $ cmpErr p e
+                                }
+                   Just (v, vT, vF) -> cmpVerb p v t vT vF a
 
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
@@ -280,10 +178,9 @@ cmpTopLeaf (Leaf p (V "let" [ Leaf _ (X x)
                             , y
                             ])) = cmpTopLet3 p x t y
 cmpTopLeaf (Leaf p (V "let" [Leaf _ (X x), y])) = cmpTopLet2 p x y
-cmpTopLeaf x@(Leaf p _) = un $ c s
+cmpTopLeaf x@(Leaf p _) = un $ c $ printf "cannot compile top level expr %s" $ fmt x
                         where
                            c = cmpErr p
-                           s = printf "cannot compile top level expr %s" $ fmt x
 
 cmpTopLeaves :: [Leaf] -> IrModT ()
 cmpTopLeaves [] = pure ()
@@ -298,11 +195,6 @@ showResult (Right x) = show x
 fmtResult :: Res (a, Mod) -> String
 fmtResult (Left e) = T.unpack e
 fmtResult (Right (_, x)) = fmtMod x
-
-runBuilder :: IrMonad e s a -> s -> Either e s
-runBuilder ir s = do{ (_, x) <- runStateT ir s
-                    ; Right x
-                    }
 
 cmpTxt :: Text -> IO ()
 cmpTxt x = putStrLn $ un fmtResult e

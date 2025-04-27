@@ -81,6 +81,10 @@ argType (_, t) = t
 sOf :: Leaf -> S
 sOf (Leaf _ s) = s
 
+arrowRet :: Type -> Type
+arrowRet (Arrow fr to) = arrowRet to
+arrowRet t = t
+
 {--
  -
  - TYCH TYPES
@@ -111,6 +115,8 @@ data Instr = Push Type Loc
            | Param Type Loc
            -- call fn x with pushed params
            | Call Type Loc
+           -- call verb y with pushed params into x
+           | Verb Type Loc Int
            -- return the value at loc
            | Ret Loc
            -- math: all locations have type t, x := y op z
@@ -118,6 +124,8 @@ data Instr = Push Type Loc
            | Sub Type Loc Loc Loc
            | Div Type Loc Loc Loc
            | Mul Type Loc Loc Loc
+           -- x := -y
+           | Neg Type Loc Loc
            deriving (Show, Eq)
 
 -- global var in module
@@ -184,3 +192,142 @@ getFromMod f = state $ \m -> (f m, m)
 
 getFromFun :: (Function -> a) -> IrFunT a
 getFromFun f = state $ \m -> (f m, m)
+
+-- unwrap an Either into an Ir err
+un :: Either e a -> IrMonad e s a
+un (Right x) = pure x
+un (Left e) = lift $ Left e
+
+-- unwrap a maybe or return 
+maybeOr :: Maybe a -> IrMonad e s e -> IrMonad e s a
+maybeOr (Just x) _ = pure x
+maybeOr Nothing f = do{ x <- f
+                      ; lift $ Left x
+                      }
+
+joinAndIdx :: a -> [a] -> (Int, [a])
+joinAndIdx x v = (i, v ++ [x])
+               where
+                   i = length v
+
+pushCtx' :: (Text, Type) -> Mod -> (Int, Mod)
+pushCtx' x m = let (i, v) = joinAndIdx x $ ctx m
+               in (i, Mod { ctx = x:ctx m
+                          , vars = vars m
+                          , funs = funs m
+                          , src = src m
+                          })
+
+pushVar' :: Var -> Mod -> (Int, Mod)
+pushVar' x m = let (i, v) = joinAndIdx x $ vars m
+               in (i, Mod { ctx = ctx m
+                          , vars = v
+                          , funs = funs m
+                          , src = src m
+                          })
+
+pushFun' :: Named Function -> Mod -> (Int, Mod)
+pushFun' x m = let (i, v) = joinAndIdx x $ funs m
+               in (i, Mod { ctx = ctx m
+                          , vars = vars m
+                          , funs = v
+                          , src = src m
+                          })
+
+incVar :: Function -> Function
+incVar f = Function { fsrc = fsrc f
+                    , finstrs = finstrs f
+                    , fctx = fctx f
+                    , flocals = flocals f
+                    , ftmp = ftmp f + 1
+                    , fmod = fmod f
+                    }
+
+pushFInstr' :: Instr -> Function -> Function
+pushFInstr' x f = Function { fsrc = fsrc f
+                           , finstrs = finstrs f ++ [x]
+                           , fctx = fctx f
+                           , flocals = flocals f
+                           , ftmp = ftmp f
+                           , fmod = fmod f
+                           }
+
+pushFCtx' :: (Text, Type) -> Function -> Function
+pushFCtx' x f = Function { fsrc = fsrc f
+                         , finstrs = finstrs f
+                         , fctx = x:fctx f
+                         , flocals = flocals f
+                         , ftmp = ftmp f
+                         , fmod = fmod f
+                         }
+
+joinFCtx' :: [(Text, Type)] -> Function -> Function
+joinFCtx' x f = Function { fsrc = fsrc f
+                         , finstrs = finstrs f
+                         , fctx = x ++ fctx f
+                         , flocals = flocals f
+                         , ftmp = ftmp f
+                         , fmod = fmod f
+                         }
+
+-- return from a state update lambda with () and the new state
+retNil :: a -> ((), a)
+retNil x = ((), x)
+
+-- update a module with a function that takes a Mod and returns a new Mod
+updMod :: (Mod -> Mod) -> IrModT ()
+updMod f = state $ \m -> retNil $ f m
+
+updModThen :: (Mod -> (a, Mod)) -> IrModT a
+updModThen f = state $ \m -> let (i, m') = f m
+                             in (i, m')
+
+updFun :: (Function -> Function) -> IrFunT ()
+updFun f = state $ \m -> retNil $ f m
+
+updFunThen :: (Function -> (a, Function)) -> IrFunT a
+updFunThen f = state $ \m -> f m
+
+pushCtx :: (Text, Type) -> IrModT Int
+pushCtx x = updModThen $ pushCtx' x
+
+pushVar :: Var -> IrModT Int
+pushVar x = updModThen $ pushVar' x
+
+pushFun :: Named Function -> IrModT Int
+pushFun x = updModThen $ pushFun' x
+
+pushFInstr :: Instr -> IrFunT ()
+pushFInstr x = updFun $ pushFInstr' x
+
+joinFCtx :: [(Text, Type)] -> IrFunT ()
+joinFCtx x = updFun $ joinFCtx' x
+
+pushFCtx :: (Text, Type) -> IrFunT ()
+pushFCtx x = updFun $ pushFCtx' x
+
+getCtx :: IrModT Ctx
+getCtx = getFromMod ctx
+
+getSrc :: IrModT Text
+getSrc = getFromMod src
+
+getMod :: IrModT Mod
+getMod = state $ \m -> (m, m)
+
+getFSrc :: IrFunT Text
+getFSrc = getFromFun fsrc
+
+getFCtx :: IrFunT Ctx
+getFCtx = getFromFun fctx
+
+newVar :: IrFunT Loc
+newVar = do{ n <- getFromFun ftmp
+           ; updFun incVar
+           ; return $ Var n
+           }
+
+runBuilder :: IrMonad e s a -> s -> Either e s
+runBuilder ir s = do{ (_, x) <- runStateT ir s
+                    ; Right x
+                    }

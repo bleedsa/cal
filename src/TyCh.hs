@@ -11,9 +11,10 @@ import Com
 import Ty
 import Parse
 import Fmt
+import Verbs
 
 -- compiler error
-typeErr :: P -> String -> Res Type
+typeErr :: P -> String -> Res a
 typeErr p s = Left $ T.pack $ printf "err: 'type: %s:\n%s" (fmtP p) s
 
 -- is x matching type y
@@ -77,20 +78,77 @@ typeApply1 p c x y = do{ x' <- typeof c x
                        where
                            fX = fmt x
                            err = "%s is used as a function but it is %s"
-                          
+
+{--
+typeApply :: P -> Ctx -> Leaf -> [Leaf] -> Res Type
+typeApply p c x [y] = do{ x' <- typeof c x
+                        ; y' <- typeof c y
+                        ; case x' of
+                              Arrow from to -> do{ _ <- check c from y
+                                                 ; Right to
+                                                 }
+                              ty -> typeErr p $ printf "%s is used as function but it is %s"
+                                                       (fmt x) (fmtType ty)
+                        }
+typeApply p c x (h:t) = do{ x' <- typeof c x
+                          ; h' <- typeof c h
+                          ; case x' of
+                                Arrow from to@(Arrow _ _) -> applyArrow from to
+                          }
+                          where
+                              applyArrow from to = do{ t' <- typeApply p c  t
+                                                     ; _ <- check c t' h
+                                                     ; Right to
+                                                     }
+--}
+
+cantApply :: P -> Type -> Type -> Res Type
+cantApply p x a = typeErr p $ printf "cannot apply %s to %s"
+                                     (fmtType x) (fmtType a)
+
+canApply :: Type -> [Type] -> Maybe Type
+canApply _ [] = Nothing
+canApply (Arrow fr to) [h] = do{ h' <- h `is` fr
+                               ; Just to
+                               }
+canApply (Arrow fr to) (h:t) = do{ h' <- h `is` fr
+                                 ; canApply to t
+                                 }
+canApply _ _ = Nothing
+
+ovrldNotFound :: P -> Text -> [Type] -> Res Verb
+ovrldNotFound p v a = typeErr p $ printf "verb overload %s[%s] not found"
+                                         v $ L.intercalate ";" $ map fmtType a
+
+fndVerbOvrld' :: P -> Ctx -> Text -> [Type] -> [Verb] -> Res Verb
+fndVerbOvrld' p c v a ((h@(n, ty, _)):t)
+ | n == v = case canApply ty a of
+                Just _ -> Right h
+                Nothing -> fndVerbOvrld' p c v a t
+ | otherwise = fndVerbOvrld' p c v a t
+fndVerbOvrld' p c v a [] = ovrldNotFound p v a
+
+fndVerbOvrld :: P -> Ctx -> Text -> [Type] -> Res Verb
+fndVerbOvrld p c v a = fndVerbOvrld' p c v a verbs
+
+fndVerbOvrldTy :: P -> Ctx -> Text -> [Type] -> Res Type
+fndVerbOvrldTy p c v a = do{ (_, t, _) <- fndVerbOvrld p c v a
+                           ; return $ arrowRet t
+                           }
+
+getVerb :: Text -> [Type] -> Maybe Int
+getVerb v a = L.findIndex fnd verbs
+            where
+                fnd (n, t, _)
+                 | n == v = case canApply t a of
+                                Just _ -> True
+                                Nothing -> False
+                 | otherwise = False
 
 typeofV :: P -> Ctx -> Text -> [Leaf] -> Res Type
-typeofV p c "+" [x, y] = typesMatch p c x y
-typeofV p c "-" [x, y] = typesMatch p c x y
-typeofV p c "*" [x, y] = typesMatch p c x y
-typeofV p c "%" [x, y] = typesMatch p c x y
-typeofV p c "!" [x] = do{ x' <- typeof c x
-                        ; case x' `is` GenInt of
-                              Just t -> Right $ Slice t
-                              Nothing -> typeErr p "iota on non-integer"
-                        }
-typeofV p c "@" [x, y] = typeApply1 p c x y
-typeofV p _ v a = typeErr p $ printf "cannot type verb %s" $ fmtS $ V v a
+typeofV p c v a = do{ a' <- typesof c a
+                    ; fndVerbOvrldTy p c v a'
+                    }
 
 typeofS :: P -> Ctx -> S -> Res Type
 typeofS _ _ (I _) = Right GenInt

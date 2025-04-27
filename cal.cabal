@@ -33,6 +33,7 @@ library
       Parse
       Ty
       TyCh
+      Verbs
   other-modules:
       Paths_cal
   autogen-modules:
