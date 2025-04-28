@@ -1,4 +1,7 @@
 let x = 1;
 let y = 2;
 let z = 3;
-let a = [x;y;z];
+let a = [ x
+        ; y
+        ; z
+        ];

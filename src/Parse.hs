@@ -276,6 +276,7 @@ expr = do{ dbgTrace "expr"
 exprs :: Parser [Leaf]
 exprs = do{ dbgTrace "exprs"
           ; x <- expr
+          ; spaces
           ; y <- observing rest
           ; return $ case y of
                          Left _ -> [x]
@@ -291,6 +292,7 @@ exprs = do{ dbgTrace "exprs"
 nouns :: Parser [Leaf]
 nouns = do{ dbgTrace "nouns"
           ; x <- noun
+          ; spaces
           ; y <- observing rest
           ; return $ case y of
                          Left _ -> [x]
