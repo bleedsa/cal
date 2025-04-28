@@ -3,10 +3,13 @@ module Ty where
 import Control.Monad.State
 import Data.Text (Text)
 import Text.Megaparsec (Pos, unPos)
+import qualified Data.List as L
 
 import Com
 
 type Named a = (Text, a)
+
+type Typed a = (Type, a)
 
 {--
  -
@@ -113,6 +116,8 @@ data Instr = Push Type Loc
            | Local Type Text
            -- load a local into a location
            | LoadLocal Type Loc Text
+           -- load a global into a location
+           | LoadGlobal Type Loc Text
            -- push fn param with type T and location x
            | Param Type Loc
            -- call fn y with pushed params into x
@@ -154,7 +159,7 @@ data Mod = Mod { src :: Text
                -- global vars
                , vars :: [Var]
                -- global functions
-               , funs :: [Named Function]
+               , funs :: [Named (Typed Function)]
                }
          deriving (Show, Eq)
 
@@ -169,8 +174,11 @@ data Function = Function { fsrc :: Text
               deriving (Show, Eq)
 
 data Loc = Var Int
-         | Body Int
          deriving (Show, Eq)
+
+data Loadable = LocalVar (Named Type)
+              | GlobalVar (Named Type)
+              deriving (Show, Eq)
 
 type IrMonad e s a = StateT s (Either e) a
 
@@ -213,6 +221,28 @@ maybeOr Nothing f = do{ x <- f
                       ; lift $ Left x
                       }
 
+-- find a local variable n in a function context
+fndFLocal :: Text -> IrFunT (Maybe Loadable)
+fndFLocal n = do{ l <- getFLocals
+                ; return $ fmap LocalVar $ L.find ((n==) . fst) l
+                }
+
+-- find a super module function in a function context
+fndMFun :: Text -> IrFunT (Maybe Loadable)
+fndMFun n = do{ mod <- getFMod
+              ; return $ fmap lod $ L.find fnd $ funs mod
+              }
+              where
+                  fnd = (n==) . fst
+                  lod (n, (t, _)) = GlobalVar (n, t)
+
+fndFX :: Text -> IrFunT (Maybe Loadable)
+fndFX n = do{ l <- fndFLocal n
+            ; case l of
+                  x@(Just _) -> pure x
+                  Nothing -> fndMFun n
+            }
+
 joinAndIdx :: a -> [a] -> (Int, [a])
 joinAndIdx x v = (i, v ++ [x])
                where
@@ -234,7 +264,7 @@ pushVar' x m = let (i, v) = joinAndIdx x $ vars m
                           , src = src m
                           })
 
-pushFun' :: Named Function -> Mod -> (Int, Mod)
+pushFun' :: Named (Typed Function) -> Mod -> (Int, Mod)
 pushFun' x m = let (i, v) = joinAndIdx x $ funs m
                in (i, Mod { ctx = ctx m
                           , vars = vars m
@@ -302,7 +332,7 @@ pushCtx x = updModThen $ pushCtx' x
 pushVar :: Var -> IrModT Int
 pushVar x = updModThen $ pushVar' x
 
-pushFun :: Named Function -> IrModT Int
+pushFun :: Named (Typed Function) -> IrModT Int
 pushFun x = updModThen $ pushFun' x
 
 pushFInstr :: Instr -> IrFunT ()
@@ -328,6 +358,12 @@ getFSrc = getFromFun fsrc
 
 getFCtx :: IrFunT Ctx
 getFCtx = getFromFun fctx
+
+getFLocals :: IrFunT [Named Type]
+getFLocals = getFromFun flocals
+
+getFMod :: IrFunT Mod
+getFMod = getFromFun fmod
 
 newVar :: IrFunT Loc
 newVar = do{ n <- getFromFun ftmp

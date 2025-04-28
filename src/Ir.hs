@@ -58,6 +58,21 @@ expTy t x = do{ c <- getFCtx
               ; maybeOr (x' `is` t) $ typeNeq t (x, x')
               }
 
+-- load an X (ident) into a Loc
+loadX :: P -> Type -> Text -> IrFunT Loc
+loadX p t n = do{ lod <- fndFX n
+                ; tmp <- newVar
+                ; f <- un $ lodF tmp lod
+                ; pushFInstr f
+                ; return tmp
+                }
+                where
+                    -- get the type of loading function
+                    -- based on the result of fndFX
+                    lodF x (Just (LocalVar (n, t))) = Right $ LoadLocal t x n
+                    lodF x (Just (GlobalVar (n, t))) = Right $ LoadGlobal t x n
+                    lodF x Nothing = cmpErr p $ printf "cannot find variable %s to load" n
+
 cmpArgs :: Args -> IrFunT ()
 cmpArgs [] = pure ()
 cmpArgs ((Leaf _ (X x), ty):t) = do{ _ <- pushFInstr $ Local ty x
@@ -94,11 +109,21 @@ cmpLam p t x r a e = do{ c <- getFCtx
                        ; return $ last e'
                        }
 
-cmpParams :: [(Type, Loc)] -> IrFunT ()
+-- compile pushing parameters at locations with types
+cmpParams :: [Typed Loc] -> IrFunT ()
 cmpParams [] = pure ()
 cmpParams ((ty, h):t) = do{ pushFInstr $ Param ty h
                           ; cmpParams t
                           }
+
+-- compile setting the indexes of location a to the values of locations X
+cmpSetIndices :: P ->  Int -> Loc -> [Loc] -> IrFunT ()
+cmpSetIndices p n a [] = pure ()
+cmpSetIndices p n a (h:t) = do{ c <- getFCtx
+                              ; i <- cmpLeaf $ Leaf p $ I n
+                              ; pushFInstr $ SetArray a i h
+                              ; cmpSetIndices p (n+1) a t
+                              }
 
 -- pos -> expected type -> verb func type -> verb func -> args
 cmpVerb :: P -> Text -> Type -> Type -> Function -> [Leaf] -> IrFunT Loc
@@ -139,14 +164,6 @@ cmpM p t x a = do{ c <- getFCtx
                  ; return ret
                  }
 
-cmpSetIndices :: P ->  Int -> Loc -> [Loc] -> IrFunT ()
-cmpSetIndices p n a [] = pure ()
-cmpSetIndices p n a (h:t) = do{ c <- getFCtx
-                              ; i <- cmpLeaf $ Leaf p $ I n
-                              ; pushFInstr $ SetArray a i h
-                              ; cmpSetIndices p (n+1) a t
-                              }
-
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
                                  ; tmp <- newVar
@@ -154,12 +171,12 @@ cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
                                  ; return tmp
                                  }
 cmpLeafAs t x@(Leaf p (X i)) = do{ t' <- expTy t x
-                                 ; tmp <- newVar
-                                 ; pushFInstr $ LoadLocal t' tmp i
+                                 ; tmp <- loadX p t' i
                                  ; return tmp
                                  }
 cmpLeafAs t x@(Leaf p (A v)) = do{ t' <- expTy t x
                                  ; ret <- newVar
+                                 ; pushFInstr $ NewArray t' ret sz
                                  ; locs <- cmpExprs v
                                  ; cmpSetIndices p 0 ret locs
                                  ; return ret
@@ -195,7 +212,7 @@ cmpTopLet3 p x t y = do{ c <- getCtx
                                      ; pushFInstr $ Ret ret
                                      }
                        ; y <- un $ runBuilder fun $ mkFun src mod
-                       ; pushFun (x, y)
+                       ; pushFun (x, (t', y))
                        ; return y
                        }
 

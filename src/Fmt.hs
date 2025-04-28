@@ -56,10 +56,10 @@ fmt (Leaf _ s) = fmtS s
 fmtInstr :: Instr -> String
 fmtInstr i = show i
 
-fmtFun :: (Text, Function) -> String
-fmtFun (n, Function{..}) = printf "%s:\n%s" n $ L.intercalate "\n" m
-                         where
-                             m = map (\x -> "    " ++ fmtInstr x) finstrs
+fmtFun :: Named (Typed Function) -> String
+fmtFun (n, (_, Function{..})) = printf "%s:\n%s" n $ L.intercalate "\n" m
+                              where
+                                  m = map (("    "++) . fmtInstr) finstrs
 
 fmtMod :: Mod -> String
 fmtMod Mod{..} = printf tmp fs
