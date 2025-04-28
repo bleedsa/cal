@@ -13,36 +13,41 @@ run :: IrFunT a -> Function
 run f = unsafeUn $ runBuilder f $ mkFun "" $ mkMod ""
 
 -- math ops are all pretty much the same
-math :: Type -> (Type -> Loc -> Loc -> Loc -> Instr) -> Function
-math t f = run $ do{ x <- newVar
-                   ; y <- newVar
-                   ; r <- newVar
-                   ; pushFInstr $ LoadLocal t x "x"
-                   ; pushFInstr $ LoadLocal t y "y"
-                   ; pushFInstr $ f t r x y
-                   }
+-- dyads created with this function
+mathD :: Type -> (Type -> Loc -> Loc -> Loc -> Instr) -> Function
+mathD t f = run $ do{ x <- newVar
+                    ; y <- newVar
+                    ; r <- newVar
+                    ; pushFInstr $ LoadLocal t x "x"
+                    ; pushFInstr $ LoadLocal t y "y"
+                    ; pushFInstr $ f t r x y
+                    }
+
+-- monadic math operators
+mathM :: Type -> (Type -> Loc -> Loc -> Instr) -> Function
+mathM t f = run $ do{ x <- newVar
+                    ; r <- newVar
+                    ; pushFInstr $ LoadLocal t x "x"
+                    ; pushFInstr $ f t r x
+                    }
 
 add :: Type -> Function
-add t = math t Add
+add t = mathD t Add
 
 sub :: Type -> Function
-sub t = math t Sub
+sub t = mathD t Sub
 
 mul :: Type -> Function
-mul t = math t Mul
+mul t = mathD t Mul
 
 div :: Type -> Function
-div t = math t Div
+div t = mathD t Div
 
 modu :: Type -> Function
-modu t = math t Modu
+modu t = mathD t Modu
 
-neg :: Function
-neg = run $ do{ x <- newVar
-              ; r <- newVar
-              ; pushFInstr $ LoadLocal GenInt x "x"
-              ; pushFInstr $ Neg GenInt r x
-              }
+neg :: Type -> Function
+neg t = mathM t Neg
 
 mathVs :: Type -> [Verb]
 mathVs t = [ ("+", typesToArrow [t, t, t], add t)
@@ -50,6 +55,7 @@ mathVs t = [ ("+", typesToArrow [t, t, t], add t)
            , ("*", typesToArrow [t, t, t], mul t)
            , ("%", typesToArrow [t, t, t], Verbs.div t)
            , ("!", typesToArrow [t, t, t], modu t)
+           , ("-", typesToArrow [t, t],    neg t)
            ]
 
 mathSigned :: [Verb]
