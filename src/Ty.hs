@@ -117,13 +117,11 @@ data Instr = Push Type Loc
            -- load a local into a location
            | LoadLocal Type Loc Text
            -- load a global into a location
-           | LoadGlobal Type Loc Text
+           | LoadGlobalFun Type Loc Text
            -- push fn param with type T and location x
            | Param Type Loc
            -- call fn y with pushed params into x
            | Call Type Loc Loc
-           -- call verb y with pushed params into x
-           | Verb Type Loc Int
            -- return the value at loc
            | Ret Loc
            -- math: all locations have type t, x := y op z
@@ -139,6 +137,25 @@ data Instr = Push Type Loc
            -- x[i] := y
            | SetArray Loc Loc Loc
            deriving (Show, Eq)
+
+instrRets :: Instr -> Maybe Loc
+instrRets (Push _ x) = pure x
+instrRets (Pop _ x) = pure x
+instrRets (Lit _ x _) = pure x
+instrRets (Local _ _) = Nothing
+instrRets (LoadLocal _ x _) = pure x
+instrRets (LoadGlobalFun _ x _) = pure x
+instrRets (Param _ _) = Nothing
+instrRets (Call _ x _) = pure x
+instrRets (Ret x) = pure x
+instrRets (Add _ x _ _) = pure x
+instrRets (Sub _ x _ _) = pure x
+instrRets (Div _ x _ _) = pure x
+instrRets (Mul _ x _ _) = pure x
+instrRets (Modu _ x _ _) = pure x
+instrRets (Neg _ x _) = pure x
+instrRets (NewArray _ x _) = pure x
+instrRets (SetArray _ x _) = Nothing
 
 -- global var in module
 type Var = (Text, IrVal)
@@ -177,7 +194,7 @@ data Loc = Var Int
          deriving (Show, Eq)
 
 data Loadable = LocalVar (Named Type)
-              | GlobalVar (Named Type)
+              | GlobalFun (Named Type)
               deriving (Show, Eq)
 
 type IrMonad e s a = StateT s (Either e) a
@@ -202,6 +219,9 @@ mkFun t m = Function { fsrc = t
                      , ftmp = 0
                      , fmod = m
                      }
+
+funRets :: Function ->  Maybe Loc
+funRets f = instrRets $ last $ finstrs f
 
 getFromMod :: (Mod -> a) -> IrModT a
 getFromMod f = state $ \m -> (f m, m)
@@ -234,8 +254,9 @@ fndMFun n = do{ mod <- getFMod
               }
               where
                   fnd = (n==) . fst
-                  lod (n, (t, _)) = GlobalVar (n, t)
+                  lod (n, (t, _)) = GlobalFun (n, t)
 
+-- find an X in a function
 fndFX :: Text -> IrFunT (Maybe Loadable)
 fndFX n = do{ l <- fndFLocal n
             ; case l of
@@ -299,6 +320,15 @@ pushFCtx' x f = Function { fsrc = fsrc f
                          , fmod = fmod f
                          }
 
+pushFLocal' :: Named Type -> Function -> Function
+pushFLocal' x f = Function { fsrc = fsrc f
+                           , finstrs = finstrs f
+                           , fctx = fctx f
+                           , flocals = x:flocals f
+                           , ftmp = ftmp f
+                           , fmod = fmod f
+                           }
+
 joinFCtx' :: [(Text, Type)] -> Function -> Function
 joinFCtx' x f = Function { fsrc = fsrc f
                          , finstrs = finstrs f
@@ -319,7 +349,6 @@ updMod f = state $ \m -> retNil $ f m
 updModThen :: (Mod -> (a, Mod)) -> IrModT a
 updModThen f = state $ \m -> let (i, m') = f m
                              in (i, m')
-
 updFun :: (Function -> Function) -> IrFunT ()
 updFun f = state $ \m -> retNil $ f m
 
@@ -343,6 +372,9 @@ joinFCtx x = updFun $ joinFCtx' x
 
 pushFCtx :: (Text, Type) -> IrFunT ()
 pushFCtx x = updFun $ pushFCtx' x
+
+pushFLocal :: Named Type -> IrFunT ()
+pushFLocal x = updFun $ pushFLocal' x
 
 getCtx :: IrModT Ctx
 getCtx = getFromMod ctx
@@ -371,7 +403,43 @@ newVar = do{ n <- getFromFun ftmp
            ; return $ Var n
            }
 
-runBuilder :: IrMonad e s a -> s -> Either e s
-runBuilder ir s = do{ (_, x) <- runStateT ir s
-                    ; Right x
-                    }
+runIrBuilder :: IrMonad e s a -> s -> Either e s
+runIrBuilder ir s = do{ (_, x) <- runStateT ir s
+                      ; Right x
+                      }
+
+data AsmInstr = Mov 
+              deriving (Show, Eq)
+
+data AsmPrc = AsmPrc { prcSrc :: Text
+                      , prcObj :: AsmObj
+                      , prcInstrs :: [String]
+                      }
+             deriving (Show, Eq)
+
+data AsmObj = AsmObj { objSrc :: Text
+                     , objMod :: Mod
+                     , objPrcs :: [AsmPrc]
+                     }
+                     deriving (Show, Eq)
+
+type AsmMonad e s a = StateT s (Either e) a
+
+type AsmPrcT a = AsmMonad Text AsmPrc a
+
+type AsmObjT a = AsmMonad Text AsmObj a
+
+mkPrc :: Text -> AsmObj -> AsmPrc
+mkPrc src obj = AsmPrc { prcSrc = src
+                       , prcObj = obj
+                       , prcInstrs = []
+                       }
+
+mkObj :: Text -> Mod -> AsmObj
+mkObj src mod = AsmObj { objSrc = src
+                       , objMod = mod
+                       , objPrcs = []
+                       }
+
+getFromState :: (s -> a) -> StateT s (Either e) a
+getFromState f = state $ \m -> (f m, m)

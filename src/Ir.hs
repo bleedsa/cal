@@ -69,16 +69,23 @@ loadX p t n = do{ lod <- fndFX n
                 where
                     -- get the type of loading function
                     -- based on the result of fndFX
-                    lodF x (Just (LocalVar (n, t))) = Right $ LoadLocal t x n
-                    lodF x (Just (GlobalVar (n, t))) = Right $ LoadGlobal t x n
+                    lodF x (Just (LocalVar (n, t))) = pure $ LoadLocal t x n
+                    lodF x (Just (GlobalFun (n, t))) = pure $ LoadGlobalFun t x n
                     lodF x Nothing = cmpErr p $ printf "cannot find variable %s to load" n
 
-cmpArgs :: Args -> IrFunT ()
-cmpArgs [] = pure ()
-cmpArgs ((Leaf _ (X x), ty):t) = do{ _ <- pushFInstr $ Local ty x
-                                   ; pushFCtx (x, ty)
-                                   ; cmpArgs t
-                                   }
+pushEach :: [Instr] -> IrFunT Instr
+pushEach [i] = do{ pushFInstr i
+                 ; pure i
+                 }
+pushEach (h:t) = do{ pushFInstr h
+                   ; pushEach t
+                   }
+
+cpyInstrs :: Function -> IrFunT Loc
+cpyInstrs f = do{ i <- pushEach $ finstrs f
+                ; x <- instrRets i `maybeOr` error "verb doesn't return"
+                ; return x
+                }
 
 cmpExprs :: [Leaf] -> IrFunT [Loc]
 cmpExprs [x] = do{ x' <- cmpLeaf x
@@ -100,14 +107,13 @@ cmpMath f t x y = do{ c <- getFCtx
                     ; return tmp
                     }
 
--- pos -> expected type -> fun -> return type -> arg types -> exprs
-cmpLam :: P -> Type -> Leaf -> Type -> Args -> [Leaf] -> IrFunT Loc
-cmpLam p t x r a e = do{ c <- getFCtx
-                       ; cmpArgs a
-                       ; r' <- expTy r $ last e
-                       ; e' <- cmpExprs e
-                       ; return $ last e'
-                       }
+cmpArgs :: Args -> IrFunT ()
+cmpArgs [] = pure ()
+cmpArgs ((Leaf _ (X x), ty):t) = do{ _ <- pushFInstr $ Local ty x
+                                   ; pushFCtx (x, ty)
+                                   ; pushFLocal (x, ty)
+                                   ; cmpArgs t
+                                   }
 
 -- compile pushing parameters at locations with types
 cmpParams :: [Typed Loc] -> IrFunT ()
@@ -128,18 +134,15 @@ cmpSetIndices p n a (h:t) = do{ c <- getFCtx
 -- pos -> expected type -> verb func type -> verb func -> args
 cmpVerb :: P -> Text -> Type -> Type -> Function -> [Leaf] -> IrFunT Loc
 cmpVerb p v e t f a = do{ c <- getFCtx
+                        ; r <- newVar
                         ; locs <- cmpExprs a
                         ; a' <- un $ typesof c a
-                        ; v' <- maybeOr (getVerb v a') $ vNotFnd p v a
-                        ; let prms = zip a' locs
-                        ; cmpParams prms
-                        ; ret <- newVar
-                        ; pushFInstr $ Verb e ret v'
-                        ; return ret
+                        ; v' <- maybeOr (getVerb v r $ zip a' locs) $ vNotFnd p v a
+                        ; cpyInstrs v'
                         }
 
 cmpV :: P -> Type -> Text -> [Leaf] -> IrFunT Loc
-cmpV p t v a = case L.find (\(n, _, _) -> n == v) verbs of
+cmpV p t v a = case L.find (\(n, _, _) -> n == v) $ verbs $ replicate (1 + length a) $ Var 0 of
                    Nothing -> do{ src <- getFSrc
                                 ; let e = printf "verb %s not found\n%s"
                                           (fmtS $ V v a) (fmtPtTo src $ pExt p)
@@ -163,6 +166,15 @@ cmpM p t x a = do{ c <- getFCtx
                                                  in un $ cmpErr p e
                  ; return ret
                  }
+
+-- pos -> expected type -> fun -> return type -> arg types -> exprs
+cmpLam :: P -> Type -> Leaf -> Type -> Args -> [Leaf] -> IrFunT Loc
+cmpLam p t x r a e = do{ c <- getFCtx
+                       ; cmpArgs a
+                       ; r' <- expTy r $ last e
+                       ; e' <- cmpExprs e
+                       ; return $ last e'
+                       }
 
 cmpLeafAs :: Type -> Leaf -> IrFunT Loc
 cmpLeafAs t x@(Leaf p (I i)) = do{ t' <- expTy t x
@@ -211,7 +223,7 @@ cmpTopLet3 p x t y = do{ c <- getCtx
                        ; let fun = do{ ret <- cmpLeafAs t' y
                                      ; pushFInstr $ Ret ret
                                      }
-                       ; y <- un $ runBuilder fun $ mkFun src mod
+                       ; y <- un $ runIrBuilder fun $ mkFun src mod
                        ; pushFun (x, (t', y))
                        ; return y
                        }

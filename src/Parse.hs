@@ -140,7 +140,8 @@ sig = do{ dbgTrace "sig"
           in return $ Sig r a'
         } <?> "function signature"
         where
-            sep = do{ spaces
+            sep = do{ dbgTrace "sep"
+                    ; spaces
                     ; string "->"
                     ; spaces
                     }
@@ -178,10 +179,21 @@ list = do{ dbgTrace "list"
          ; x <- nouns
          ; spaces
          ; char ']'
-         ; return $ if length x == 1
-                    then x !! 0
-                    else Leaf p $ A x
+         ; return $ Leaf p $ A x
+--         ; return $ if length x == 1
+--                    then x !! 0
+--                    else Leaf p $ A x
          }
+
+-- a parenthesized expression
+prnExpr :: Parser Leaf
+prnExpr = do{ char '('
+            ; spaces
+            ; x <- expr
+            ; spaces
+            ; char ')'
+            ; return x
+            }
 
 noun :: Parser Leaf
 noun = do{ dbgTrace "noun"
@@ -218,14 +230,14 @@ typ = do{ dbgTrace "typ"
 let_ :: Parser ()
 let_ = do{ _ <- string $ T.pack "let"
          ; pure ()
-         }
+         } <?> "let"
 
 bind3 :: Parser Leaf
 bind3 = do{ dbgTrace "bind3"
           ; p <- getPos
           ; let_
           ; spaces
-          ; n <- name'
+          ; n <- name
           ; spaces
           ; _ <- char ':'
           ; spaces
@@ -234,7 +246,7 @@ bind3 = do{ dbgTrace "bind3"
           ; _ <- char '='
           ; spaces
           ; x <- expr
-          ; return $ Leaf p $ V "let" [Leaf p $ X n, t, x]
+          ; return $ Leaf p $ V "let" [n, t, x]
           } <?> "ternary let binding"
 
 bind2 :: Parser Leaf
@@ -266,9 +278,10 @@ expr = do{ dbgTrace "expr"
          ; return x
          } <?> "expression"
          where
-             e = [ try bind
-                 , try dyad
+             e = [ prnExpr
+                 , try bind
                  , monad
+                 , try dyad
                  , try term
                  , noun
                  ]
@@ -277,7 +290,7 @@ exprs :: Parser [Leaf]
 exprs = do{ dbgTrace "exprs"
           ; x <- expr
           ; spaces
-          ; y <- observing rest
+          ; y <- observing $ try rest
           ; return $ case y of
                          Left _ -> [x]
                          Right tail -> x:tail
@@ -306,6 +319,9 @@ nouns = do{ dbgTrace "nouns"
 
 top :: Parser [Leaf]
 top = do{ e <- exprs
+        ; spaces
+        ; char ';'
+        ; spaces
         ; eof
         ; return e
         }

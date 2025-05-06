@@ -110,11 +110,11 @@ canApply :: Type -> [Type] -> Maybe Type
 canApply _ [] = Nothing
 canApply (Arrow _ (Arrow _ _)) [h] = Nothing
 canApply (Arrow fr to) [h] = do{ h' <- h `is` fr
-                               ; Just to
-                               }
+                                   ; Just to
+                                   }
 canApply (Arrow fr to) (h:t) = do{ h' <- h `is` fr
-                                 ; canApply to t
-                                 }
+                                     ; canApply to t
+                                     }
 canApply _ _ = Nothing
 
 ovrldNotFound :: P -> Text -> [Type] -> Res Verb
@@ -130,21 +130,25 @@ fndVerbOvrld' p c v a ((h@(n, ty, _)):t)
 fndVerbOvrld' p c v a [] = ovrldNotFound p v a
 
 fndVerbOvrld :: P -> Ctx -> Text -> [Type] -> Res Verb
-fndVerbOvrld p c v a = fndVerbOvrld' p c v a verbs
+fndVerbOvrld p c v t = fndVerbOvrld' p c v t $ verbs $ replicate (1 + length t) $ Var 0
 
 fndVerbOvrldTy :: P -> Ctx -> Text -> [Type] -> Res Type
 fndVerbOvrldTy p c v a = do{ (_, t, _) <- fndVerbOvrld p c v a
                            ; return $ arrowRet t
                            }
 
-getVerb :: Text -> [Type] -> Maybe Int
-getVerb v a = L.findIndex fnd verbs
-            where
-                fnd (n, t, _)
-                 | n == v = case canApply t a of
-                                Just _ -> True
-                                Nothing -> False
-                 | otherwise = False
+-- sym -> expected type -> arg types -> index
+getVerb :: Text -> Loc -> [(Type, Loc)] -> Maybe Function
+getVerb v r a = do{ (_, _, f) <- L.find fnd $ verbs $ r:al
+                  ; Just f
+                  }
+                  where
+                      (at, al) = unzip a
+                      fnd (n, t, _)
+                       | n == v = case canApply t at of
+                                      Just _ -> True
+                                      Nothing -> False
+                       | otherwise = False
 
 allMatch :: P -> Ctx -> [Leaf] -> Res Type
 allMatch p c [x] = typeof c x

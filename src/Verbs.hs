@@ -10,58 +10,53 @@ unsafeUn :: Either e s -> s
 unsafeUn (Right x) = x
 
 run :: IrFunT a -> Function
-run f = unsafeUn $ runBuilder f $ mkFun "" $ mkMod ""
+run f = unsafeUn $ runIrBuilder f $ mkFun "" $ mkMod ""
 
 -- math ops are all pretty much the same
 -- dyads created with this function
-mathD :: Type -> (Type -> Loc -> Loc -> Loc -> Instr) -> Function
-mathD t f = run $ do{ x <- newVar
-                    ; y <- newVar
-                    ; r <- newVar
-                    ; pushFInstr $ LoadLocal t x "x"
-                    ; pushFInstr $ LoadLocal t y "y"
-                    ; pushFInstr $ f t r x y
-                    }
+mathD :: Type -> (Type -> Loc -> Loc -> Loc -> Instr) -> [Loc] -> Function
+mathD t f [r, x, y] = run $ pushFInstr $ f t r x y
 
 -- monadic math operators
-mathM :: Type -> (Type -> Loc -> Loc -> Instr) -> Function
-mathM t f = run $ do{ x <- newVar
-                    ; r <- newVar
-                    ; pushFInstr $ LoadLocal t x "x"
-                    ; pushFInstr $ f t r x
-                    }
+mathM :: Type -> (Type -> Loc -> Loc -> Instr) -> [Loc] -> Function
+mathM t f [r, x] = run $ pushFInstr $ f t r x
 
-add :: Type -> Function
-add t = mathD t Add
+add :: Type -> [Loc] -> Function
+add t a  = mathD t Add a
 
-sub :: Type -> Function
-sub t = mathD t Sub
+sub :: Type -> [Loc] -> Function
+sub t a = mathD t Sub a
 
-mul :: Type -> Function
-mul t = mathD t Mul
+mul :: Type -> [Loc] -> Function
+mul t a = mathD t Mul a
 
-div :: Type -> Function
-div t = mathD t Div
+div :: Type -> [Loc] -> Function
+div t a = mathD t Div a
 
-modu :: Type -> Function
-modu t = mathD t Modu
+modu :: Type -> [Loc] -> Function
+modu t a = mathD t Modu a
 
-neg :: Type -> Function
-neg t = mathM t Neg
+neg :: Type -> [Loc] -> Function
+neg t a = mathM t Neg a
 
-mathVs :: Type -> [Verb]
-mathVs t = [ ("+", typesToArrow [t, t, t], add t)
-           , ("-", typesToArrow [t, t, t], sub t)
-           , ("*", typesToArrow [t, t, t], mul t)
-           , ("%", typesToArrow [t, t, t], Verbs.div t)
-           , ("!", typesToArrow [t, t, t], modu t)
-           , ("-", typesToArrow [t, t],    neg t)
-           ]
+mathVs :: [Loc] -> Type -> [Verb]
+mathVs a t = [ ("+", typesToArrow [t, t, t], add t a)
+             , ("-", typesToArrow [t, t, t], sub t a)
+             , ("*", typesToArrow [t, t, t], mul t a)
+             , ("%", typesToArrow [t, t, t], Verbs.div t a)
+             , ("!", typesToArrow [t, t, t], modu t a)
+             , ("-", typesToArrow [t, t],    neg t a)
+             ]
 
-mathSigned :: [Verb]
-mathSigned = concat $ map (mathVs . Signed) [8, 16, 32, 64]
+mathSigned :: [Loc] -> [Verb]
+mathSigned a = concat $ map (mathVs a . Signed) [64, 32, 16, 8]
 
-verbs :: [Verb]
-verbs = concat [ mathVs GenInt
-               , mathSigned
-               ]
+mathUnsigned :: [Loc] -> [Verb]
+mathUnsigned a = concat $ map (mathVs a . Unsigned) [64, 32, 16, 8]
+
+verbs :: [Loc] -> [Verb]
+verbs a = concat [ -- mathVs GenInt
+                 -- , mathSigned
+                   mathUnsigned a
+                 , mathSigned a
+                 ]

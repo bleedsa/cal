@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Asm.Linux_x64
       Com
       Fmt
       Ir
@@ -43,8 +44,10 @@ library
   ghc-options: -XOverloadedStrings -XCPP -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , ghc
     , megaparsec ==9.6.1
     , mtl ==2.3.1
+    , qbe
     , text
     , text-short
   default-language: Haskell2010
@@ -61,8 +64,10 @@ executable cal-exe
   build-depends:
       base >=4.7 && <5
     , cal
+    , ghc
     , megaparsec ==9.6.1
     , mtl ==2.3.1
+    , qbe
     , text
     , text-short
   default-language: Haskell2010
@@ -80,8 +85,10 @@ test-suite cal-test
   build-depends:
       base >=4.7 && <5
     , cal
+    , ghc
     , megaparsec ==9.6.1
     , mtl ==2.3.1
+    , qbe
     , text
     , text-short
   default-language: Haskell2010
