@@ -185,6 +185,7 @@ data Function = Function { fsrc :: Text
                          , finstrs :: [Instr]
                          , fctx :: Ctx
                          , flocals :: [Named Type]
+                         , fargs :: [Named Type]
                          , ftmp :: Int
                          , fmod :: Mod
                          }
@@ -216,6 +217,7 @@ mkFun t m = Function { fsrc = t
                      , finstrs = []
                      , fctx = ctx m
                      , flocals = []
+                     , fargs = []
                      , ftmp = 0
                      , fmod = m
                      }
@@ -244,7 +246,8 @@ maybeOr Nothing f = do{ x <- f
 -- find a local variable n in a function context
 fndFLocal :: Text -> IrFunT (Maybe Loadable)
 fndFLocal n = do{ l <- getFLocals
-                ; return $ fmap LocalVar $ L.find ((n==) . fst) l
+                ; a <- getFArgs
+                ; return $ fmap LocalVar $ L.find ((n==) . fst) $ l ++ a
                 }
 
 -- find a super module function in a function context
@@ -300,6 +303,7 @@ incVar f = Function { fsrc = fsrc f
                     , flocals = flocals f
                     , ftmp = ftmp f + 1
                     , fmod = fmod f
+                    , fargs = fargs f
                     }
 
 pushFInstr' :: Instr -> Function -> Function
@@ -309,6 +313,7 @@ pushFInstr' x f = Function { fsrc = fsrc f
                            , flocals = flocals f
                            , ftmp = ftmp f
                            , fmod = fmod f
+                           , fargs = fargs f
                            }
 
 pushFCtx' :: (Text, Type) -> Function -> Function
@@ -318,6 +323,7 @@ pushFCtx' x f = Function { fsrc = fsrc f
                          , flocals = flocals f
                          , ftmp = ftmp f
                          , fmod = fmod f
+                         , fargs = fargs f
                          }
 
 pushFLocal' :: Named Type -> Function -> Function
@@ -327,7 +333,18 @@ pushFLocal' x f = Function { fsrc = fsrc f
                            , flocals = x:flocals f
                            , ftmp = ftmp f
                            , fmod = fmod f
+                           , fargs = fargs f
                            }
+
+pushFArg' :: Named Type -> Function -> Function
+pushFArg' x f = Function { fsrc = fsrc f
+                         , finstrs = finstrs f
+                         , fctx = fctx f
+                         , flocals = flocals f
+                         , ftmp = ftmp f
+                         , fmod = fmod f
+                         , fargs = x:fargs f
+                         }
 
 joinFCtx' :: [(Text, Type)] -> Function -> Function
 joinFCtx' x f = Function { fsrc = fsrc f
@@ -336,6 +353,7 @@ joinFCtx' x f = Function { fsrc = fsrc f
                          , flocals = flocals f
                          , ftmp = ftmp f
                          , fmod = fmod f
+                         , fargs = fargs f
                          }
 
 -- return from a state update lambda with () and the new state
@@ -376,6 +394,9 @@ pushFCtx x = updFun $ pushFCtx' x
 pushFLocal :: Named Type -> IrFunT ()
 pushFLocal x = updFun $ pushFLocal' x
 
+pushFArg :: Named Type -> IrFunT ()
+pushFArg x = updFun $ pushFArg' x
+
 getCtx :: IrModT Ctx
 getCtx = getFromMod ctx
 
@@ -394,6 +415,9 @@ getFCtx = getFromFun fctx
 getFLocals :: IrFunT [Named Type]
 getFLocals = getFromFun flocals
 
+getFArgs :: IrFunT [Named Type]
+getFArgs = getFromFun fargs
+
 getFMod :: IrFunT Mod
 getFMod = getFromFun fmod
 
@@ -408,38 +432,71 @@ runIrBuilder ir s = do{ (_, x) <- runStateT ir s
                       ; Right x
                       }
 
-data AsmInstr = Mov 
+data CcInstr = Mov 
               deriving (Show, Eq)
 
-data AsmPrc = AsmPrc { prcSrc :: Text
-                      , prcObj :: AsmObj
-                      , prcInstrs :: [String]
-                      }
+data CcPrc = CcPrc { prcSrc :: Text
+                    , prcObj :: CcObj
+                    , prcInstrs :: [String]
+                    }
              deriving (Show, Eq)
 
-data AsmObj = AsmObj { objSrc :: Text
-                     , objMod :: Mod
-                     , objPrcs :: [AsmPrc]
-                     }
-                     deriving (Show, Eq)
+data CcObj = CcObj { objSrc :: Text
+                    , objMod :: Mod
+                    , objPrcs :: [CcPrc]
+                    }
+                    deriving (Show, Eq)
 
-type AsmMonad e s a = StateT s (Either e) a
+type CcMonad e s a = StateT s (Either e) a
 
-type AsmPrcT a = AsmMonad Text AsmPrc a
+type CcPrcT a = CcMonad Text CcPrc a
 
-type AsmObjT a = AsmMonad Text AsmObj a
+type CcObjT a = CcMonad Text CcObj a
 
-mkPrc :: Text -> AsmObj -> AsmPrc
-mkPrc src obj = AsmPrc { prcSrc = src
+mkPrc :: Text -> CcObj -> CcPrc
+mkPrc src obj = CcPrc { prcSrc = src
                        , prcObj = obj
                        , prcInstrs = []
                        }
 
-mkObj :: Text -> Mod -> AsmObj
-mkObj src mod = AsmObj { objSrc = src
+mkObj :: Text -> Mod -> CcObj
+mkObj src mod = CcObj { objSrc = src
                        , objMod = mod
                        , objPrcs = []
                        }
 
 getFromState :: (s -> a) -> StateT s (Either e) a
 getFromState f = state $ \m -> (f m, m)
+
+pushPInstr' :: CcPrc -> String -> CcPrc
+pushPInstr' p i = CcPrc { prcSrc = prcSrc p
+                        , prcObj = prcObj p
+                        , prcInstrs = i:prcInstrs p
+                        }
+
+pushPInstr :: String -> CcPrcT ()
+pushPInstr i = state $ \m -> ((), pushPInstr' m i)
+
+pushOPrc' :: CcObj -> CcPrc -> CcObj
+pushOPrc' o p = CcObj { objSrc = objSrc o
+                      , objMod = objMod o
+                      , objPrcs = p:objPrcs o
+                      }
+
+pushOPrc :: CcPrc -> CcObjT ()
+pushOPrc p = state $ \m -> ((), pushOPrc' m p)
+
+getOSrc :: CcObjT Text
+getOSrc = getFromState objSrc
+
+getOMod :: CcObjT Mod
+getOMod = getFromState objMod
+
+getOObj :: CcObjT CcObj
+getOObj = getFromState identity
+
+getPSrc :: CcPrcT Text
+getPSrc = getFromState prcSrc
+
+getPObj :: CcPrcT CcObj
+getPObj = getFromState prcObj

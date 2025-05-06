@@ -72,3 +72,16 @@ fmtMod Mod{..} = printf tmp fs
 -- format pointing to part of the source
 fmtPtTo :: Text -> (Int, Int) -> String
 fmtPtTo src (ln, col) = printf "    %s\n    %s" (lnOfSrc src ln) (arrowTxt col)
+
+fmtPrcInstr :: String -> String
+fmtPrcInstr x
+ | last x == '{' = x
+ | last x == '}' = x
+ | last x == ':' = x
+fmtPrcInstr x = x ++ ";"
+
+fmtPrc :: CcPrc -> String
+fmtPrc CcPrc{..} = L.intercalate "\n" $ reverse $ map fmtPrcInstr prcInstrs
+
+fmtObj :: CcObj -> String
+fmtObj CcObj{..} = L.intercalate "\n" $ map (("    "++) . fmtPrc) objPrcs

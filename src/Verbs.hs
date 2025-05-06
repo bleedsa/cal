@@ -55,8 +55,8 @@ mathUnsigned :: [Loc] -> [Verb]
 mathUnsigned a = concat $ map (mathVs a . Unsigned) [64, 32, 16, 8]
 
 verbs :: [Loc] -> [Verb]
-verbs a = concat [ -- mathVs GenInt
+verbs a = concat [ mathVs a GenInt
                  -- , mathSigned
-                   mathUnsigned a
+                 , mathUnsigned a
                  , mathSigned a
                  ]

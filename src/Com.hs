@@ -22,3 +22,6 @@ arrowTxt i = replicate (i - 1) '-' ++ "^"
 
 slice :: Int -> Int -> [a] -> [a]
 slice from to x = take (to - from + 1) $ drop from x
+
+identity :: a -> a
+identity x = x

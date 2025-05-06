@@ -3,4 +3,3 @@ let add = { x: i64 -> y: i64 -> i64
           };
 
 let y: i64 = 1+1;
-let x = add[y;2];

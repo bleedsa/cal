@@ -25,7 +25,7 @@ source-repository head
 
 library
   exposed-modules:
-      Asm.Linux_x64
+      Cc.Cosmo
       Com
       Fmt
       Ir

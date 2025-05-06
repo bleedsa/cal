@@ -111,7 +111,7 @@ cmpArgs :: Args -> IrFunT ()
 cmpArgs [] = pure ()
 cmpArgs ((Leaf _ (X x), ty):t) = do{ _ <- pushFInstr $ Local ty x
                                    ; pushFCtx (x, ty)
-                                   ; pushFLocal (x, ty)
+                                   ; pushFArg (x, ty)
                                    ; cmpArgs t
                                    }
 
